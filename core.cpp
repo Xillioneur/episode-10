@@ -35,8 +35,14 @@ void InitGame() {
     target = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Simple bloom shader (extract bright parts and blur)
+    // Updated for cross-platform compatibility
     const char* bloomFrag = 
+#if defined(PLATFORM_WEB) || defined(GRAPHICS_API_OPENGL_ES3)
+        "#version 300 es\n"
+        "precision highp float;\n"
+#else
         "#version 330\n"
+#endif
         "in vec2 fragTexCoord;\n"
         "in vec4 fragColor;\n"
         "uniform sampler2D texture0;\n"
@@ -46,16 +52,17 @@ void InitGame() {
         "    vec4 texel = texture(texture0, fragTexCoord);\n"
         "    vec3 bloom = vec3(0.0);\n"
         "    float threshold = 0.85;\n"
-        "    if (length(texel.rgb) > threshold) bloom = texel.rgb;\n"
-        "    // Simple 3x3 blur approximation\n"
-        "    vec2 size = vec2(1.0/1280.0, 1.0/720.0);\n"
+        "    \n"
+        "    // Simple blur\n"
+        "    vec2 size = vec2(1.0/1440.0, 1.0/810.0);\n"
         "    for (int x = -1; x <= 1; x++) {\n"
         "        for (int y = -1; y <= 1; y++) {\n"
-        "            vec3 sample = texture(texture0, fragTexCoord + vec2(x, y) * size * 2.0).rgb;\n"
-        "            if (length(sample) > threshold) bloom += sample * 0.1;\n"
+        "            vec3 sampleColor = texture(texture0, fragTexCoord + vec2(float(x), float(y)) * size * 1.5).rgb;\n"
+        "            float brightness = max(sampleColor.r, max(sampleColor.g, sampleColor.b));\n"
+        "            if (brightness > threshold) bloom += sampleColor * 0.15;\n"
         "        }\n"
         "    }\n"
-        "    finalColor = vec4(texel.rgb + bloom * 0.3, texel.a);\n"
+        "    finalColor = vec4(texel.rgb + bloom * 0.4, texel.a);\n"
         "}\n";
 
     bloomShader = LoadShaderFromMemory(NULL, bloomFrag);

@@ -74,9 +74,12 @@ int main() {
                 ResetLevel();
             }
         }
-        else if (gameState == VICTORY) {
+        if (gameState == VICTORY) {
             if (IsKeyPressed(KEY_ESCAPE)) break;
         }
+
+        BeginDrawing();
+        ClearBackground(BLACK);
 
         if (gameState != TITLE_SCREEN && gameState != INSTRUCTIONS) {
             BeginTextureMode(target);
@@ -86,16 +89,13 @@ int main() {
             EndMode3D();
             EndTextureMode();
 
-            BeginDrawing();
-            ClearBackground(BLACK);
-            BeginShaderMode(bloomShader);
+            if (bloomShader.id > 0) BeginShaderMode(bloomShader);
             // Flip texture vertically (OpenGL vs Raylib)
             DrawTextureRec(target.texture, {0, 0, (float)target.texture.width, (float)-target.texture.height}, {0, 0}, WHITE);
-            EndShaderMode();
+            if (bloomShader.id > 0) EndShaderMode();
 
             DrawHUD();
         } else {
-            BeginDrawing();
             ClearBackground({12, 12, 22, 255});
         }
 
