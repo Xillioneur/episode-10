@@ -41,8 +41,11 @@ void ApplyEnemyHitToPlayer(const Enemy& e) {
 
     float dmgMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 2.1f : ((e.comboStep == 3) ? 1.6f : 1.3f))
                                     : (e.isHeavyAttack ? 1.75f : 1.0f);
+    if (e.type == BOSS && e.isPhase2) dmgMult *= 1.25f;
+
     float poiseMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 2.2f : ((e.comboStep == 3) ? 1.8f : 1.4f))
                                       : (e.isHeavyAttack ? 1.85f : 1.0f);
+    if (e.type == BOSS && e.isPhase2) poiseMult *= 1.3f;
     float knockMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 1.8f : 1.3f)
                                       : (e.isHeavyAttack ? 1.5f : 1.0f);
 
@@ -91,6 +94,12 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
     bool isHeavy = (player.currentAttack == HEAVY);
     int baseDamage = isHeavy ? 92 : 62;
     float basePoiseDmg = isHeavy ? 68.0f : 28.0f;
+
+    // Fatigue penalty
+    if (player.stamina < 0.0f) {
+        baseDamage = (int)(baseDamage * 0.5f);
+        basePoiseDmg *= 0.6f;
+    }
 
     if (isHeavy) {
         float prog = 1.0f - player.attackTimer / POWER_ATTACK_DURATION;
@@ -176,7 +185,11 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
 
     if (e.health <= 0) {
         e.alive = false;
-        SpawnDataParticles(e.position, 30);
+        SpawnAscensionParticles(e.position);
+        if (player.lockedTarget != -1 && &enemies[player.lockedTarget] == &e) {
+            player.lockedTarget = -1;
+        }
+        hitStopTimer = 0.15f; // Moment of Peace
     }
 
     return true;
@@ -210,6 +223,53 @@ void UpdateEnemies(float dt) {
         if (e.type == BOSS) {
             e.state = CHASE;
             e.alertTimer = 10.0f;
+
+            // Phase 2 transition logic
+            if (!e.hasTriggeredPhase2 && e.health < e.maxHealth / 2) {
+                e.hasTriggeredPhase2 = true;
+                e.isPhase2 = true;
+                e.phaseTransitionTimer = 3.5f;
+                e.stunTimer = 3.5f; // Pause boss during roar
+                e.isAttacking = false;
+                e.bodyColor = WHITE; // Blazing Light
+                SpawnAscensionParticles(e.position);
+                SpawnAscensionParticles(Vector3Add(e.position, {0, 4.0f, 0}));
+                hitStopTimer = 0.5f;
+                player.shakeTimer = 0.8f;
+            }
+
+            if (e.phaseTransitionTimer > 0) {
+                e.phaseTransitionTimer -= dt;
+                // Resplendent burst
+                if (GetRandomValue(0, 3) == 0) {
+                    SpawnAscensionParticles(Vector3Add(e.position, {0, (float)GetRandomValue(0, 8), 0}));
+                }
+                e.velocity = {0,0,0};
+                continue; 
+            }
+
+            // Sermon of Light (Projectile release)
+            static float sermonTimer = 0.0f;
+            if (e.isPhase2) {
+                sermonTimer += dt;
+                if (sermonTimer > 5.5f) {
+                    sermonTimer = 0.0f;
+                    // Release 8 spheres of grace
+                    for (int i = 0; i < 8; i++) {
+                        float angle = (float)i / 8.0f * 2.0f * PI;
+                        Particle p{};
+                        p.position = Vector3Add(e.position, {0, 3.5f, 0});
+                        p.velocity = {cosf(angle) * 12.0f, 0, sinf(angle) * 12.0f};
+                        p.lifetime = p.maxLife = 2.5f;
+                        p.color = WHITE;
+                        p.size = 1.4f;
+                        particles.push_back(p);
+                    }
+                }
+            }
+
+            if (e.isPhase2) moveSpeed *= 1.35f;
+
             if (distToPlayer > 0.5f) {
                 e.rotation = atan2f(toPlayer.x, toPlayer.z) * RAD2DEG;
             }
@@ -223,14 +283,20 @@ void UpdateEnemies(float dt) {
             e.comboDelayTimer -= dt;
             Vector3 eFacing = {sinf(e.rotation*DEG2RAD), 0, cosf(e.rotation*DEG2RAD)};
             float dot = Vector3DotProduct(eFacing, Vector3Normalize(toPlayer));
-            if (distToPlayer <= ATTACK_RANGE + 5.0f && dot > 0.5f && !e.isAttacking && e.comboDelayTimer <= 0.0f && e.stamina >= 30.0f) {
+            float range = (e.isPhase2) ? ATTACK_RANGE + 7.5f : ATTACK_RANGE + 5.0f;
+            
+            if (distToPlayer <= range && dot > 0.5f && !e.isAttacking && e.comboDelayTimer <= 0.0f && e.stamina >= 25.0f) {
                 e.comboStep = (e.comboStep % 5) + 1;
-                if (e.comboStep == 1) e.comboDelayTimer = 2.2f;
+                // Faster combos in phase 2
+                float cd = (e.isPhase2) ? 0.8f : 2.2f;
+                if (e.comboStep == 1) e.comboDelayTimer = cd;
+                
                 e.isAttacking = true;
                 float dur = (e.comboStep == 3 || e.comboStep == 5) ? 0.85f : 0.55f;
+                if (e.isPhase2) dur *= 0.75f; // Faster swings
                 e.attackTimer = dur;
-                e.stamina -= 30.0f;
-                e.staminaRegenDelay = 1.2f;
+                e.stamina -= 25.0f;
+                e.staminaRegenDelay = 1.0f;
             }
         } else {
             // Awareness
@@ -397,6 +463,8 @@ void UpdateEnemies(float dt) {
         if (e.isAttacking) {
             float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.85f : 0.55f)
                                         : e.attackDur * (e.isHeavyAttack ? 1.75f : 1.0f);
+            if (e.type == BOSS && e.isPhase2) dur *= 0.75f;
+            
             float progress = 1.0f - (e.attackTimer / dur);
 
             // Boss combo animations
@@ -440,6 +508,25 @@ void UpdateEnemies(float dt) {
             // Hit window
             float hitStart = (e.type == BOSS && (e.comboStep == 3 || e.comboStep == 5)) ? 0.25f : 0.20f;
             float hitEnd = (e.type == BOSS && e.comboStep == 3) ? 0.85f : 0.80f;
+
+            // VOID SLAM Logic (Phase 2, Step 5)
+            if (e.type == BOSS && e.isPhase2 && e.comboStep == 5) {
+                static bool slamTriggered = false;
+                if (progress < 0.1f) slamTriggered = false;
+                
+                if (progress > 0.75f && !slamTriggered) {
+                    slamTriggered = true;
+                    SpawnVoidShockwave(e.position);
+                    player.shakeTimer = 0.6f;
+                    
+                    float dist = Vector3Distance(player.position, e.position);
+                    if (dist < 18.0f && !player.isRolling && player.hitInvuln <= 0.0f) {
+                        ApplyEnemyHitToPlayer(e);
+                        player.velocity = Vector3Add(player.velocity, {0, 15.0f, 0}); // Knock up
+                    }
+                }
+            }
+
             if (progress > hitStart && progress < hitEnd) {
                 if (IsEnemyAttackSwingHittingPlayer(e)) {
                     if (player.isParrying && player.parryTimer > 0.12f) {

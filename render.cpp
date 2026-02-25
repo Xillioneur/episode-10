@@ -1,11 +1,25 @@
 #include "game.h"
 
 void Draw3DScene() {
-    DrawPlane({0,-1.0f,0}, {600,600}, {20, 25, 35, 255}); // Midnight Steel
+    DrawPlane({0,-1.0f,0}, {600,600}, {15, 10, 25, 255}); // Dark Void
+
+    // Celestial Nebula (Deep Purple atmosphere)
+    DrawSphere({player.position.x, 0, player.position.z}, 180.0f, {35, 15, 65, 40});
 
     for (const auto& obs : obstacles) {
-        DrawCube(obs, 8.0f, 16.0f, 8.0f, {45, 50, 65, 255}); // Slate Blue Stone
-        DrawCube(Vector3Add(obs, {0,9.0f,0}), 6.0f, 2.0f, 6.0f, {60, 65, 85, 255});
+        if (obs.y > 100.0f) {
+            // Floating Debris
+            float realY = obs.y - 100.0f;
+            float pulse = sinf(GetTime() * 0.5f + obs.x) * 2.0f;
+            DrawCube({obs.x, realY + pulse, obs.z}, 4.0f, 4.0f, 4.0f, {65, 70, 90, 255});
+            DrawCube({obs.x, realY + pulse, obs.z}, 4.2f, 4.2f, 4.2f, Fade(GOLD, 0.1f));
+        } else {
+            // Pillars/Ruins
+            float h = obs.y;
+            Vector3 pos = {obs.x, h/2.0f - 1.0f, obs.z};
+            DrawCube(pos, 8.0f, h, 8.0f, {45, 50, 65, 255}); 
+            DrawCube(Vector3Add(pos, {0, h/2.0f + 1.0f, 0}), 9.0f, 2.0f, 9.0f, {60, 65, 85, 255});
+        }
     }
 
     // Exit portal only in level 1
@@ -24,63 +38,75 @@ void Draw3DScene() {
         DrawSphere(p.position, p.size, p.color);
     }
 
-    // Weapon trail
+    // Weapon trail (Grace Ribbon)
     for (size_t i = 1; i < weaponTrail.size(); i++) {
         float alpha = 1.0f - (weaponTrail[i].time / 0.5f);
         if (alpha <= 0) continue;
-        Color c = player.powerReady ? Fade(ORANGE, alpha) : Fade(player.weapon.bladeColor, alpha*0.8f);
+        Color c = player.powerReady ? Fade(WHITE, alpha) : Fade(player.weapon.bladeColor, alpha*0.8f);
         DrawLine3D(weaponTrail[i-1].pos, weaponTrail[i].pos, c);
         DrawLine3D(Vector3Add(weaponTrail[i-1].pos, {0,0.2f,0}), Vector3Add(weaponTrail[i].pos, {0,0.2f,0}), c);
     }
 }
 
 void DrawHUD() {
-    // Health (Spiritual Purity)
+    // Resolve (Spiritual Purity)
     float hpRatio = (float)player.health / player.maxHealth;
-    Color hpColor = (hpRatio > 0.5f) ? SKYBLUE : (hpRatio > 0.25f) ? YELLOW : RED;
+    Color hpColor = (hpRatio > 0.5f) ? SKYBLUE : (hpRatio > 0.25f) ? YELLOW : ORANGE;
     DrawRectangle(40, 40, 480, 44, Fade(BLACK, 0.7f));
     DrawRectangle(44, 44, 472 * hpRatio, 36, hpColor);
-    DrawText("SPIRITUAL PURITY", 50, 48, 24, WHITE);
+    DrawText("SPIRITUAL RESOLVE", 50, 48, 24, WHITE);
 
-    // Stamina (Divine Grace)
+    // Spirit (Divine Grace)
     float stamRatio = player.stamina / MAX_STAMINA;
     DrawRectangle(40, 94, 480, 44, Fade(BLACK, 0.7f));
     DrawRectangle(44, 98, 472 * stamRatio, 36, GOLD);
-    DrawText("DIVINE GRACE", 50, 102, 24, WHITE);
+    DrawText("DIVINE SPIRIT", 50, 102, 24, WHITE);
 
-    // Poise (Faith Buffer)
+    // Clarity (Faith Strength)
     float poiseRatio = player.poise / player.maxPoise;
     DrawRectangle(40, 148, 480, 28, Fade(BLACK, 0.7f));
     DrawRectangle(44, 152, 472 * poiseRatio, 20, WHITE);
-    DrawText("FAITH STRENGTH", 50, 152, 18, BLACK);
+    DrawText("INNER CLARITY", 50, 152, 18, BLACK);
 
     // Holy Essence
     DrawText(TextFormat("Holy Essence: %d", player.flasks), 40, 190, 30, SKYBLUE);
 
     // Lock indicator
     if (player.lockedTarget != -1) {
-        DrawText("JUDGMENT CAST", SCREEN_WIDTH - 320, 30, 36, GOLD);
+        DrawText("SEEK CLARITY", SCREEN_WIDTH - 320, 30, 36, GOLD);
+        DrawText("Middle Click to Release", SCREEN_WIDTH - 320, 70, 20, LIGHTGRAY);
     }
 
     // Heavy charge
     if (player.isCharging || player.powerReady) {
         float charge = player.chargeTimer / POWER_ATTACK_CHARGE;
         DrawRectangle(40, SCREEN_HEIGHT - 120, 480, 40, Fade(BLACK, 0.7f));
-        DrawRectangle(44, SCREEN_HEIGHT - 116, 472 * charge, 32, player.powerReady ? WHITE : GOLD);
-        DrawText("DIVINE WRATH READY", 540, SCREEN_HEIGHT - 110, 36, player.powerReady ? WHITE : GOLD);
+        DrawRectangle(44, SCREEN_HEIGHT - 116, 472 * std::min(charge, 1.0f), 32, player.powerReady ? WHITE : GOLD);
+        DrawText(player.powerReady ? "SERMON OF LIGHT READY" : "GATHERING LIGHT", 50, SCREEN_HEIGHT - 110, 24, player.powerReady ? WHITE : BLACK);
     }
 
     // Feedback text
-    if (player.riposteTimer > 0.0f) DrawText("HOLY SMITE!", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 120, 64, GOLD);
-    if (player.perfectRollTimer > 0.0f) DrawText("CELESTIAL STEP!", SCREEN_WIDTH/2 - 240, SCREEN_HEIGHT/2 - 80, 64, SKYBLUE);
+    if (player.riposteTimer > 0.0f) DrawText("DIVINE EMBRACE!", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 - 120, 64, GOLD);
+    if (player.perfectRollTimer > 0.0f) DrawText("MERCIFUL STEP!", SCREEN_WIDTH/2 - 240, SCREEN_HEIGHT/2 - 80, 64, SKYBLUE);
 
     // Boss health bar
-    if (player.lockedTarget != -1 && enemies[player.lockedTarget].type == BOSS && enemies[player.lockedTarget].alive) {
-        Enemy& boss = enemies[player.lockedTarget];
-        float bossRatio = (float)boss.health / boss.maxHealth;
-        DrawRectangle(SCREEN_WIDTH/2 - 310, 50, 620, 40, Fade(BLACK, 0.8f));
-        DrawRectangle(SCREEN_WIDTH/2 - 300, 60, 600 * bossRatio, 20, MAROON);
-        DrawText("THE ARCH-FIEND", SCREEN_WIDTH/2 - MeasureText("THE ARCH-FIEND", 50)/2, 20, 50, RED);
+    if (enemies.size() > 0 && currentLevel == 2) {
+        Enemy& boss = enemies[0];
+        if (boss.type == BOSS && boss.alive) {
+            float bossRatio = (float)boss.health / boss.maxHealth;
+            int barWidth = 1000;
+            int barHeight = 12;
+            int barX = SCREEN_WIDTH/2 - barWidth/2;
+            int barY = SCREEN_HEIGHT - 100;
+            
+            DrawRectangle(barX - 4, barY - 4, barWidth + 8, barHeight + 8, Fade(BLACK, 0.8f));
+            DrawRectangle(barX, barY, barWidth * bossRatio, barHeight, boss.isPhase2 ? ORANGE : GOLD);
+            
+            DrawText("THE CORRUPTED ARBITER", SCREEN_WIDTH/2 - MeasureText("THE CORRUPTED ARBITER", 30)/2, barY - 40, 30, GOLD);
+            if (boss.isPhase2) {
+                DrawText("PHASE II: BLAZING RESTORATION", SCREEN_WIDTH/2 - MeasureText("PHASE II: BLAZING RESTORATION", 20)/2, barY + 20, 20, WHITE);
+            }
+        }
     }
 }
 
@@ -92,18 +118,18 @@ void DrawTitleScreen() {
     DrawText("The Celestial Nexus", SCREEN_WIDTH/2 - MeasureText("The Celestial Nexus", 50)/2,
              SCREEN_HEIGHT/2 - 80, 50, GOLD);
 
-    DrawText("A Heroic Defense of the Eternal Light", 
-             SCREEN_WIDTH/2 - MeasureText("A Heroic Defense of the Eternal Light", 40)/2,
-             SCREEN_HEIGHT/2 + 20, 40, LIGHTGRAY);
+    DrawText("A Journey of Restoration and Grace", 
+             SCREEN_WIDTH/2 - MeasureText("A Journey of Restoration and Grace", 40)/2,
+             SCREEN_HEIGHT/2 + 20, 40, SKYBLUE);
 
-    DrawText("Press ENTER to Transcend", SCREEN_WIDTH/2 - MeasureText("Press ENTER to Transcend", 50)/2,
+    DrawText("Press ENTER to Begin the Rite", SCREEN_WIDTH/2 - MeasureText("Press ENTER to Begin the Rite", 50)/2,
              SCREEN_HEIGHT - 140, 50, WHITE);
 }
-// render.cpp (replace the entire DrawInstructionsScreen function with this updated version)
+
 void DrawInstructionsScreen() {
     DrawRectangle(0,0,SCREEN_WIDTH,SCREEN_HEIGHT, Fade(BLACK, 0.85f));
 
-    DrawText("DIVINE AWAKENING", SCREEN_WIDTH/2 - MeasureText("DIVINE AWAKENING", 80)/2,
+    DrawText("PATH OF GRACE", SCREEN_WIDTH/2 - MeasureText("PATH OF GRACE", 80)/2,
              60, 80, GOLD);
 
     int y = 160;
@@ -112,65 +138,64 @@ void DrawInstructionsScreen() {
     const int listFont = 32;
     const Color textCol = LIGHTGRAY;
 
-    DrawText("You are the Divine Sentinel, a celestial hero tasked with", 
-             SCREEN_WIDTH/2 - MeasureText("You are the Divine Sentinel, a celestial hero tasked with", storyFont)/2,
+    DrawText("You are the Emissary of Grace, sent to bring peace", 
+             SCREEN_WIDTH/2 - MeasureText("You are the Emissary of Grace, sent to bring peace", storyFont)/2,
              y, storyFont, textCol); y += lineHeight;
-    DrawText("purifying the Celestial Nexus from infernal corruption.", 
-             SCREEN_WIDTH/2 - MeasureText("purifying the Celestial Nexus from infernal corruption.", storyFont)/2,
+    DrawText("to the lost spirits of the Celestial Nexus.", 
+             SCREEN_WIDTH/2 - MeasureText("to the lost spirits of the Celestial Nexus.", storyFont)/2,
              y, storyFont, textCol); y += lineHeight + 10;
 
-    DrawText("Purify all corrupted spirits to open the Golden Gate.", 
-             SCREEN_WIDTH/2 - MeasureText("Purify all corrupted spirits to open the Golden Gate.", storyFont)/2,
+    DrawText("Soothe all agitated spirits to open the Golden Gate.", 
+             SCREEN_WIDTH/2 - MeasureText("Soothe all agitated spirits to open the Golden Gate.", storyFont)/2,
              y, storyFont, textCol); y += lineHeight;
 
-    DrawText("Transcendence", SCREEN_WIDTH/2 - MeasureText("Transcendence", 50)/2, y, 50, GOLD); y += 60;
+    DrawText("Benevolence", SCREEN_WIDTH/2 - MeasureText("Benevolence", 50)/2, y, 50, GOLD); y += 60;
 
     int leftX = 260;
     DrawText("WASD          - Movement", leftX, y, listFont, textCol); y += lineHeight;
     DrawText("Mouse         - Divine Sight", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Left Click    - Holy Strike", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Hold LClick   - Divine Wrath", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Shift (tap)   - Celestial Step", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Shift (hold)  - Angelic Flight", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Space         - Ascension", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("Left Click    - Extend Grace", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("Hold LClick   - Sermon of Light", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("Shift (tap)   - Merciful Step", leftX, y, listFont, textCol); y += lineHeight;
     DrawText("E             - Holy Essence", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Left Ctrl     - Sacred Parry", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("F             - Cast Judgment", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Mouse flick   - Switch Judgment", leftX, y, listFont, textCol); y += lineHeight + 30;
+    DrawText("Left Ctrl     - Sacred Redirection", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("Middle Click  - Seek Clarity", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("Mouse flick   - Switch Focus", leftX, y, listFont, textCol); y += lineHeight + 30;
 
-    DrawText("Wisdom", SCREEN_WIDTH/2 - MeasureText("Wisdom", 50)/2, y, 50, SKYBLUE); y += 60;
+    DrawText("Divine Wisdom", SCREEN_WIDTH/2 - MeasureText("Divine Wisdom", 50)/2, y, 50, SKYBLUE); y += 60;
 
-    DrawText("- Step through darkness at the right moment for Grace", leftX, y, listFont, LIME); y += lineHeight;
-    DrawText("- Successful parry allows for a Direct Soul Purification", leftX, y, listFont, LIME); y += lineHeight;
-    DrawText("- Manage Divine Grace to prevent spiritual exhaustion", leftX, y, listFont, LIME); y += lineHeight;
-    DrawText("- Backstabs & ripostes deal massive holy damage", leftX, y, listFont, LIME); y += lineHeight + 50;
+    DrawText("- Step through confusion at the right moment for Grace", leftX, y, listFont, LIME); y += lineHeight;
+    DrawText("- Sacred Redirection allows for a Divine Embrace", leftX, y, listFont, LIME); y += lineHeight;
+    DrawText("- Manage Divine Spirit to maintain your composure", leftX, y, listFont, LIME); y += lineHeight;
+    DrawText("- Restoring spirits from behind brings swifter peace", leftX, y, listFont, LIME); y += lineHeight + 50;
 
     DrawText("Go in Peace.", SCREEN_WIDTH/2 - MeasureText("Go in Peace.", 60)/2, y, 60, WHITE); y += 100;
 
-    DrawText("Press ENTER to Begin Trial", SCREEN_WIDTH/2 - MeasureText("Press ENTER to Begin Trial", 50)/2,
+    DrawText("Press ENTER to Begin the Rite", SCREEN_WIDTH/2 - MeasureText("Press ENTER to Begin the Rite", 50)/2,
              SCREEN_HEIGHT - 100, 50, WHITE);
 }
+
 void DrawDeathScreen() {
     DrawRectangle(0,0,SCREEN_WIDTH,SCREEN_HEIGHT, Fade(BLACK, 0.9f));
-    DrawText("CONNECTION SEVERED", SCREEN_WIDTH/2 - MeasureText("CONNECTION SEVERED", 140)/2,
-             SCREEN_HEIGHT/2 - 140, 140, MAROON);
+    DrawText("RETURNING TO LIGHT", SCREEN_WIDTH/2 - MeasureText("RETURNING TO LIGHT", 120)/2,
+             SCREEN_HEIGHT/2 - 140, 120, GOLD);
     DrawText(currentDeathMessage, SCREEN_WIDTH/2 - MeasureText(currentDeathMessage, 60)/2,
-             SCREEN_HEIGHT/2 + 20, 60, GOLD);
-    DrawText("Press R to Reclaim Your Spirit", SCREEN_WIDTH/2 - MeasureText("Press R to Reclaim Your Spirit", 50)/2,
+             SCREEN_HEIGHT/2 + 20, 60, SKYBLUE);
+    DrawText("Press R to Rejuvenate Your Spirit", SCREEN_WIDTH/2 - MeasureText("Press R to Rejuvenate Your Spirit", 50)/2,
              SCREEN_HEIGHT/2 + 140, 50, WHITE);
 }
 
 void DrawVictoryScreen() {
     DrawRectangle(0,0,SCREEN_WIDTH,SCREEN_HEIGHT, Fade(BLACK, 0.8f));
     if (currentLevel == 2) {
-        DrawText("SPIRITUAL ASCENSION!", SCREEN_WIDTH/2 - MeasureText("SPIRITUAL ASCENSION!", 80)/2,
+        DrawText("ALL SOULS ASCENDED!", SCREEN_WIDTH/2 - MeasureText("ALL SOULS ASCENDED!", 80)/2,
                  SCREEN_HEIGHT/2 - 140, 80, WHITE);
-        DrawText("THE HEAVENS ARE SECURED", SCREEN_WIDTH/2 - MeasureText("THE HEAVENS ARE SECURED", 60)/2,
+        DrawText("THE NEXUS IS RESTORED", SCREEN_WIDTH/2 - MeasureText("THE NEXUS IS RESTORED", 60)/2,
                  SCREEN_HEIGHT/2 - 20, 60, GOLD);
-        DrawText("Darkness Banished – Eternal Light Restored", SCREEN_WIDTH/2 - MeasureText("Darkness Banished – Eternal Light Restored", 50)/2,
+        DrawText("Shadows Banished – Eternal Grace Abides", SCREEN_WIDTH/2 - MeasureText("Shadows Banished – Eternal Grace Abides", 50)/2,
                  SCREEN_HEIGHT/2 + 80, 50, WHITE);
     } else {
-        DrawText("TRIAL 1 COMPLETE", SCREEN_WIDTH/2 - MeasureText("TRIAL 1 COMPLETE", 80)/2,
+        DrawText("AREA PURIFIED", SCREEN_WIDTH/2 - MeasureText("AREA PURIFIED", 80)/2,
                  SCREEN_HEIGHT/2 - 100, 80, SKYBLUE);
         DrawText("Ascending to the Inner Sanctum...", SCREEN_WIDTH/2 - MeasureText("Ascending to the Inner Sanctum...", 50)/2,
                  SCREEN_HEIGHT/2 + 20, 50, GOLD);

@@ -25,16 +25,17 @@ const float ROLL_COST = 18.0f;
 const float PERFECT_ROLL_WINDOW = 0.10f;
 const int MAX_PLAYER_HEALTH = 420;
 const int MAX_STAMINA = 145;
-const float STAMINA_REGEN_RATE = 38.0f;
-const float STAMINA_SPRINT_COST = 14.0f;
-const float STAMINA_ATTACK_COST = 22.0f;
-const float STAMINA_POWER_COST = 52.0f;
-const float STAMINA_PARRY_COST = 28.0f;
+const float STAMINA_REGEN_RATE = 65.0f; // Snappier regeneration
+const float REGEN_DELAY_AFTER_ACTION = 0.35f; // Shorter delay
+const float STAMINA_SPRINT_COST = 16.0f;
+const float STAMINA_ATTACK_COST = 20.0f;
+const float STAMINA_POWER_COST = 45.0f;
+const float STAMINA_PARRY_COST = 24.0f;
 const float NORMAL_ATTACK_DURATION = 0.42f;
+
 const float POWER_ATTACK_CHARGE = 0.85f;
 const float POWER_ATTACK_DURATION = 1.05f;
 const float COMBO_RESET_TIME = 1.1f;
-const float REGEN_DELAY_AFTER_ACTION = 0.8f;
 const float CAMERA_DISTANCE = 19.0f;
 const float CAMERA_HEIGHT = 15.2f;
 const float CAMERA_SMOOTH = 13.5f;
@@ -170,6 +171,9 @@ struct Enemy {
     float dodgeChance = 0.55f;
     int comboStep = 0;
     float comboDelayTimer = 0.0f;
+    bool isPhase2 = false;
+    float phaseTransitionTimer = 0.0f;
+    bool hasTriggeredPhase2 = false;
 };
 
 // ======================================================================
@@ -212,6 +216,8 @@ void DrawDeathScreen();
 void DrawVictoryScreen();
 void SpawnDataParticles(Vector3 pos, int count = 12);
 void SpawnHitSparks(Vector3 pos, int count = 8);
+void SpawnVoidShockwave(Vector3 pos);
+void SpawnAscensionParticles(Vector3 pos);
 void AddWeaponTrailPoint();
 bool CanSeePlayer(const Enemy& e);
 bool IsEnemyAttackSwingHittingPlayer(const Enemy& e);

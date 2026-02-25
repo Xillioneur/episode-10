@@ -35,6 +35,36 @@ void SpawnHitSparks(Vector3 pos, int count) {
     }
 }
 
+void SpawnVoidShockwave(Vector3 pos) {
+    int count = 60;
+    for (int i = 0; i < count; i++) {
+        float angle = (float)i / count * 2.0f * PI;
+        Particle p{};
+        p.position = pos;
+        float speed = 25.0f;
+        p.velocity = { cosf(angle) * speed, 0.5f, sinf(angle) * speed };
+        p.lifetime = p.maxLife = 0.65f;
+        p.color = { 160, 220, 255, 255 }; // Cloud Blue
+        p.size = 1.2f;
+        particles.push_back(p);
+    }
+}
+
+void SpawnAscensionParticles(Vector3 pos) {
+    int count = 40;
+    for (int i = 0; i < count; i++) {
+        Particle p{};
+        p.position = pos;
+        p.velocity = {GetRandomValue(-40,40)/20.0f,
+                      GetRandomValue(60,180)/20.0f,
+                      GetRandomValue(-40,40)/20.0f};
+        p.lifetime = p.maxLife = GetRandomValue(120,250)/100.0f;
+        p.color = Fade(GOLD, 0.8f);
+        p.size = GetRandomValue(5,15)/10.0f;
+        particles.push_back(p);
+    }
+}
+
 void UpdateParticles(float dt) {
     for (auto it = particles.begin(); it != particles.end(); ) {
         it->lifetime -= dt;
@@ -43,7 +73,14 @@ void UpdateParticles(float dt) {
             continue;
         }
         it->position = Vector3Add(it->position, Vector3Scale(it->velocity, dt));
-        it->velocity.y -= 3.5f * dt;
+        // Ascension particles defy gravity
+        if (it->color.r == 255 && it->color.g == 203) { // Close enough to GOLD
+             it->velocity.y += 0.8f * dt; 
+             it->velocity.x *= 0.98f;
+             it->velocity.z *= 0.98f;
+        } else {
+            it->velocity.y -= 3.5f * dt;
+        }
         ++it;
     }
 }

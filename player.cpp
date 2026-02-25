@@ -21,6 +21,9 @@ void AddWeaponTrailPoint() {
 }
 
 void UpdatePlayer(float dt) {
+    bool attackInput = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    bool attackRelease = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
+
     player.perfectRollTimer = std::max(0.0f, player.perfectRollTimer - dt);
     player.riposteTimer = std::max(0.0f, player.riposteTimer - dt);
 
@@ -42,7 +45,7 @@ void UpdatePlayer(float dt) {
     player.rotation -= mouseDelta.x * sens;
 
     // Target lock
-    if (IsKeyPressed(KEY_F)) {
+    if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) {
         if (player.lockedTarget != -1) {
             player.lockedTarget = -1;
         } else {
@@ -137,25 +140,41 @@ void UpdatePlayer(float dt) {
 
     // Speed & sprint
     float speed = BASE_PLAYER_SPEED;
-    bool sprinting = IsKeyDown(KEY_LEFT_SHIFT) && hasMoveInput && player.stamina > 8.0f && !player.isRolling;
+    static bool sprintLock = false;
+    if (player.stamina <= 0.0f) sprintLock = true;
+    if (sprintLock && player.stamina >= MAX_STAMINA * 0.25f) sprintLock = false;
+
+    bool sprinting = IsKeyDown(KEY_LEFT_SHIFT) && hasMoveInput && !sprintLock && !player.isRolling;
     if (sprinting) {
         speed *= SPRINT_MULTIPLIER;
         player.stamina -= STAMINA_SPRINT_COST * dt;
         player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION;
+
+        // Angelic Flight particles
+        if (GetRandomValue(0, 4) == 0) {
+            Particle p{};
+            p.position = Vector3Add(player.position, {0, 1.5f, 0});
+            p.velocity = {(float)GetRandomValue(-20, 20)/40.0f, 1.5f, (float)GetRandomValue(-20, 20)/40.0f};
+            p.lifetime = p.maxLife = 0.5f;
+            p.color = Fade(WHITE, 0.6f);
+            p.size = 0.35f;
+            particles.push_back(p);
+        }
     }
-    if (player.stamina <= 0) speed *= EXHAUSTED_MULTIPLIER;
+    if (player.stamina <= 0.0f) speed *= EXHAUSTED_MULTIPLIER;
+
     if (player.isAttacking || player.isRolling || player.isParrying || player.isHealing || player.staggerTimer > 0) {
         speed *= 0.38f;
     }
 
     // Roll
-    if (IsKeyPressed(KEY_LEFT_SHIFT) && hasMoveInput && player.stamina >= ROLL_COST &&
+    if (IsKeyPressed(KEY_LEFT_SHIFT) && hasMoveInput && player.stamina > 0.0f &&
         !player.isAttacking && !player.isRolling && !player.isParrying && !player.isHealing && player.staggerTimer <= 0) {
         player.isRolling = true;
         player.rollTimer = ROLL_DURATION;
         player.rollDirection = moveDir;
         player.stamina -= ROLL_COST;
-        player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION * 0.6f;
+        player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION;
         player.hitInvuln = ROLL_DURATION + 0.15f;
     }
 
@@ -165,6 +184,29 @@ void UpdatePlayer(float dt) {
     if (player.isRolling) {
         targetVelocity = Vector3Scale(player.rollDirection, rollSpeed);
         player.rollTimer -= dt;
+
+        // Divine Lunge follow-up
+        if (attackInput && player.rollTimer > 0.05f && player.stamina > 0.0f) {
+            player.isRolling = false;
+            player.isAttacking = true;
+            player.attackTimer = NORMAL_ATTACK_DURATION * 0.95f;
+            player.currentAttack = LIGHT_1;
+            player.comboStep = 1;
+            player.stamina -= STAMINA_ATTACK_COST;
+            player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION;
+            player.velocity = Vector3Add(player.velocity, Vector3Scale(player.rollDirection, 22.0f));
+
+            // Burst of Light
+            for (int i = 0; i < 15; i++) {
+                Particle p{};
+                p.position = Vector3Add(player.position, {0, 1.2f, 0});
+                p.velocity = Vector3Scale({(float)GetRandomValue(-100, 100)/10.0f, 0.5f, (float)GetRandomValue(-100, 100)/10.0f}, 1.2f);
+                p.lifetime = p.maxLife = 0.45f;
+                p.color = WHITE;
+                p.size = 0.4f;
+                particles.push_back(p);
+            }
+        }
 
         bool perfectWindowActive = (player.rollTimer < PERFECT_ROLL_WINDOW);
         if (perfectWindowActive && player.perfectRollTimer <= 0.0f) {
@@ -268,11 +310,11 @@ void UpdatePlayer(float dt) {
     }
 
     // Parry
-    if (IsKeyPressed(KEY_LEFT_CONTROL) && player.stamina >= STAMINA_PARRY_COST &&
+    if (IsKeyPressed(KEY_LEFT_CONTROL) && player.stamina > 0.0f &&
         !player.isAttacking && !player.isRolling && !player.isHealing && player.staggerTimer <= 0) {
         player.isParrying = true;
         player.parryTimer = 0.38f;
-        player.stamina -= STAMINA_PARRY_COST;
+        player.stamina = std::max(0.0f, player.stamina - STAMINA_PARRY_COST);
         player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION;
     }
     if (player.isParrying) {
@@ -280,12 +322,9 @@ void UpdatePlayer(float dt) {
         if (player.parryTimer <= 0.0f) player.isParrying = false;
     }
 
-    // Attack input
-    bool attackInput = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
-    bool attackRelease = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
-
+    // Attack logic
     if (attackInput && !player.isCharging && !player.isAttacking && !player.isRolling &&
-        !player.isParrying && !player.isHealing && player.stamina >= STAMINA_POWER_COST &&
+        !player.isParrying && !player.isHealing && player.stamina > 0.0f &&
         player.staggerTimer <= 0) {
         player.isCharging = true;
         player.chargeTimer = 0.0f;
@@ -299,16 +338,18 @@ void UpdatePlayer(float dt) {
 
     if (attackRelease && player.isCharging) {
         player.isCharging = false;
+        bool fatigued = (player.stamina <= 0.0f); // Check if we started attack while exhausted
+
         if (player.powerReady) {
             player.isAttacking = true;
-            player.attackTimer = POWER_ATTACK_DURATION;
+            player.attackTimer = POWER_ATTACK_DURATION * (fatigued ? 1.4f : 1.0f);
             player.currentAttack = HEAVY;
             player.stamina -= STAMINA_POWER_COST;
-            player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION * 1.4f;
+            player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION * 2.0f;
             player.comboStep = 0;
             player.comboTimer = COMBO_RESET_TIME;
         }
-        else if (player.stamina >= STAMINA_ATTACK_COST) {
+        else if (player.stamina > 0.0f) {
             player.isAttacking = true;
             player.stamina -= STAMINA_ATTACK_COST;
             player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION;
@@ -318,7 +359,7 @@ void UpdatePlayer(float dt) {
                 player.comboStep = (player.comboStep % 3) + 1;
             }
             player.comboTimer = COMBO_RESET_TIME;
-            player.attackTimer = NORMAL_ATTACK_DURATION;
+            player.attackTimer = NORMAL_ATTACK_DURATION * (fatigued ? 1.3f : 1.0f);
             player.currentAttack = static_cast<AttackType>(player.comboStep - 1);
         }
         player.powerReady = false;
@@ -327,7 +368,9 @@ void UpdatePlayer(float dt) {
     // Attack animation & hit detection
     if (player.isAttacking) {
         player.comboTimer = COMBO_RESET_TIME;
-        float duration = (player.currentAttack == HEAVY) ? POWER_ATTACK_DURATION : NORMAL_ATTACK_DURATION;
+        bool fatigued = (player.stamina < 0.0f); // Current state during animation
+        float durationBase = (player.currentAttack == HEAVY) ? POWER_ATTACK_DURATION : NORMAL_ATTACK_DURATION;
+        float duration = durationBase * (fatigued ? 1.35f : 1.0f);
         float progress = 1.0f - (player.attackTimer / duration);
 
         // Swing animation
@@ -394,7 +437,8 @@ void UpdatePlayer(float dt) {
 
     // Stamina regen
     player.staminaRegenDelay -= dt;
-    if (player.staminaRegenDelay <= 0.0f) {
+    bool actionPause = player.isAttacking || player.isRolling || player.isParrying || player.isCharging;
+    if (player.staminaRegenDelay <= 0.0f && !actionPause) {
         player.stamina = std::min(player.stamina + STAMINA_REGEN_RATE * dt, (float)MAX_STAMINA);
     }
 }
@@ -414,6 +458,7 @@ void DrawPlayer() {
     Color bodyColor = divineWhite;
     if (player.isHealing) bodyColor = divineSky;
     if (player.staggerTimer > 0) bodyColor = {180, 60, 60, 255}; // Desaturated Red Stagger
+    if (player.stamina < 0.0f) bodyColor = {130, 130, 150, 255}; // Exhausted Gray
 
     // Legs
     DrawCylinderEx({-0.4f, -0.9f, 0}, {-0.4f, 1.0f, 0}, 0.5f, 0.4f, 12, {30, 35, 50, 255}); // Dark Void

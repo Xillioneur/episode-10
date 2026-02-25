@@ -18,11 +18,11 @@ RenderTexture2D target = { 0 };
 Vector3 camPos = {0, CAMERA_HEIGHT, CAMERA_DISTANCE};
 float hitStopTimer = 0.0f;
 std::vector<std::string> deathMessages = {
-    "Spirit Banished", "Vessel Shattered", "Divine Connection Lost", "Faith Tested",
-    "Fallen from Grace", "Returning to Light", "Trial Incomplete", "Purification Failed",
-    "Ascension Delayed", "Seek Forgiveness", "Soul Recalibrating"
+    "Returning to Light", "Spirit Recalibrating", "Divine Connection Renewing", "Faith Tested",
+    "Resting in Grace", "Ascension Delayed", "Trial of Patience", "Purification Ongoing",
+    "Seeking Guidance", "Soul Rejuvenating"
 };
-const char* currentDeathMessage = "Spirit Banished";
+const char* currentDeathMessage = "Returning to Light";
 
 // ======================================================================
 // Initialization & Level Generation
@@ -47,22 +47,30 @@ void InitGame() {
         "in vec4 fragColor;\n"
         "uniform sampler2D texture0;\n"
         "uniform vec4 colDiffuse;\n"
+        "uniform float chromaticAmount;\n"
         "out vec4 finalColor;\n"
         "void main() {\n"
-        "    vec4 texel = texture(texture0, fragTexCoord);\n"
-        "    vec3 bloom = vec3(0.0);\n"
-        "    float threshold = 0.85;\n"
+        "    vec2 uv = fragTexCoord;\n"
+        "    float amount = chromaticAmount;\n"
         "    \n"
-        "    // Simple blur\n"
+        "    // Chromatic Aberration\n"
+        "    vec3 col;\n"
+        "    col.r = texture(texture0, vec2(uv.x + amount, uv.y)).r;\n"
+        "    col.g = texture(texture0, uv).g;\n"
+        "    col.b = texture(texture0, vec2(uv.x - amount, uv.y)).b;\n"
+        "    \n"
+        "    vec3 bloom = vec3(0.0);\n"
+        "    float threshold = 0.82;\n"
+        "    \n"
         "    vec2 size = vec2(1.0/1440.0, 1.0/810.0);\n"
         "    for (int x = -1; x <= 1; x++) {\n"
         "        for (int y = -1; y <= 1; y++) {\n"
-        "            vec3 sampleColor = texture(texture0, fragTexCoord + vec2(float(x), float(y)) * size * 1.5).rgb;\n"
+        "            vec3 sampleColor = texture(texture0, uv + vec2(float(x), float(y)) * size * 2.0).rgb;\n"
         "            float brightness = max(sampleColor.r, max(sampleColor.g, sampleColor.b));\n"
-        "            if (brightness > threshold) bloom += sampleColor * 0.15;\n"
+        "            if (brightness > threshold) bloom += sampleColor * 0.12;\n"
         "        }\n"
         "    }\n"
-        "    finalColor = vec4(texel.rgb + bloom * 0.4, texel.a);\n"
+        "    finalColor = vec4(col + bloom * 0.55, 1.0);\n"
         "}\n";
 
     bloomShader = LoadShaderFromMemory(NULL, bloomFrag);
@@ -77,7 +85,7 @@ void ResetLevel() {
     player.flasks = MAX_FLASKS;
     player.poise = 120.0f;
     player.maxPoise = 120.0f;
-    player.weapon = {"Divine Scepter", 1.0f, 1.0f, 6.8f, {255, 215, 0, 255}, true};
+    player.weapon = {"Scepter of Dawn", 1.0f, 1.0f, 6.8f, {255, 240, 150, 255}, true};
     player.swingYaw = 30.0f;
     player.swingPitch = -30.0f;
 
@@ -92,23 +100,39 @@ void ResetLevel() {
     int border = 80;
     int step = 12;
     for (int i = -border; i <= border; i += step) {
-        obstacles.push_back({(float)i, 0, (float)-border});
-        obstacles.push_back({(float)i, 0, (float)border});
-        obstacles.push_back({(float)-border, 0, (float)i});
-        obstacles.push_back({(float)border, 0, (float)i});
+        obstacles.push_back({(float)i, 22.0f, (float)-border});
+        obstacles.push_back({(float)i, 22.0f, (float)border});
+        obstacles.push_back({(float)-border, 22.0f, (float)i});
+        obstacles.push_back({(float)border, 22.0f, (float)i});
     }
 
     if (currentLevel == 1) {
-        // Random pillars in open field
+        // Celestial Ruins (Structured clusters)
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dis(-border+15, border-15);
-        for (int i = 0; i < 90; i++) {
-            float x = dis(gen);
-            float z = dis(gen);
-            if (Vector3Distance({x,0,z}, {0,0,0}) > 18.0f) {
-                obstacles.push_back({x, 0, z});
+        std::uniform_real_distribution<float> dis(-border+20, border-20);
+
+        for (int c = 0; c < 15; c++) {
+            float cx = dis(gen);
+            float cz = dis(gen);
+            if (Vector3Distance({cx, 0, cz}, {0, 0, 0}) < 20.0f) continue;
+
+            int clusterSize = GetRandomValue(3, 7);
+            for (int i = 0; i < clusterSize; i++) {
+                float ox = (float)GetRandomValue(-12, 12);
+                float oz = (float)GetRandomValue(-12, 12);
+                float height = (float)GetRandomValue(12, 28);
+                obstacles.push_back({cx + ox, height, cz + oz});
             }
+        }
+
+        // Floating Debris
+        for (int i = 0; i < 40; i++) {
+            float dx = dis(gen);
+            float dz = dis(gen);
+            float dy = (float)GetRandomValue(15, 45);
+            // Height > 100 signal for floating debris in renderer
+            obstacles.push_back({dx, 100.0f + dy, dz}); 
         }
 
         // Enemies
@@ -249,6 +273,13 @@ void UpdateGame(float dt) {
     UpdatePlayer(effectiveDt);
     UpdateEnemies(effectiveDt);
     UpdateParticles(effectiveDt);
+
+    // Update chromatic aberration intensity
+    if (bloomShader.id > 0) {
+        int chromLoc = GetShaderLocation(bloomShader, "chromaticAmount");
+        float chromVal = 0.0012f + player.shakeTimer * 0.045f;
+        SetShaderValue(bloomShader, chromLoc, &chromVal, SHADER_UNIFORM_FLOAT);
+    }
 
     // Floating ash particles
     if (GetRandomValue(0, 30) == 0) {
