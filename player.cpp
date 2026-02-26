@@ -138,7 +138,7 @@ void UpdatePlayer(float dt) {
                              Vector3Scale(targetRight, moveInput.x));
     }
 
-    // Speed & sprint
+    // Movement logic
     float speed = BASE_PLAYER_SPEED;
     static bool sprintLock = false;
     if (player.stamina <= 0.0f) sprintLock = true;
@@ -304,7 +304,8 @@ void UpdatePlayer(float dt) {
     if (player.isHealing) {
         player.healTimer -= dt;
         if (player.healTimer <= 0.0f) {
-            player.health = std::min(player.health + (int)FLASK_HEAL_AMOUNT, player.maxHealth);
+            float bonus = player.mercyRelics * 10.0f;
+            player.health = std::min((float)player.maxHealth, player.health + FLASK_HEAL_AMOUNT + bonus);
             player.isHealing = false;
         }
     }

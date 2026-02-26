@@ -1,36 +1,30 @@
-# Game Design Document: Divine Sentinel
+# Game Design Document: Divine Sentinel - Path of Grace
 
 ## 1. Vision & Overview
-**Divine Sentinel** is a third-person experience of restoration and grace. Inspired by the concepts of divine intervention and mercy, the game focuses on **purifying** a corrupted realm rather than destroying it. 
+**Divine Sentinel** is a third-person journey of restoration. You are the Emissary of Grace, tasked with purifying lost spirits. As you restore the Nexus, you collect **Sacred Relics**—echoes of the spirits' true natures—which you can manage in your inventory to strengthen your connection to the Divine.
 
 *   **Core Pillars:**
-    *   **Divine Grace:** Actions are fluid and benevolent. You don't "attack"; you extend "Grace" to soothe the corrupted.
-    *   **Non-Violent Resolution:** Spirits are never "killed." They are "Restored" or "Ascended" back to the Light.
-    *   **Merciful Defense:** Parrying is a "Sacred Redirection," gently turning away chaos to create a moment of "Clarity."
+    - **Fluid Restoration:** Purify spirits through rhythmic grace.
+    - **Sacred Collection:** Automatically harvest Relics from purified souls.
+    - **The Book of Life (Inventory):** Manage and equip relics to customize your playstyle.
 
 ## 2. World & Narrative
-*   **The Setting:** **The Celestial Nexus**. A majestic cathedral-like realm of floating ruins, currently clouded by the "Shadow of Doubt."
-*   **The Protagonist:** The **Emissary of Grace**, a being of pure light sent to bring the lost back to the fold.
-*   **Goal:** Reach the Corrupted Arbiter and perform the **Rite of Restoration** to bring peace to the Nexus.
+- **The Goal:** Restore the Celestial Nexus by collecting the lost virtues of its inhabitants.
+- **Relics of Virtue:**
+    - **Relic of Mercy:** Dropped by Compassionate spirits. Boosts healing.
+    - **Relic of Discipline:** Dropped by Cruel/Wrathful spirits. Boosts Poise damage.
+    - **Relic of Fortitude:** Dropped by Greedy/Faithful spirits. Boosts Spiritual Resolve.
 
 ## 3. Gameplay Mechanics
-### 3.1 The Path of Grace
-*   **The Instrument:** The **Scepter of Dawn**.
-*   **Grace Combo:** A rhythmic 3-part blessing that surrounds lost spirits in golden light.
-*   **Divine Lunge:** A swift move to reach those in need of restoration.
-*   **Resolve (Health):** The Emissary's connection to the Divine. If it falters, they simply return to the Light to try again (no "death").
+### 3.1 The Rite of Purification
+- **Soothe:** Bring a spirit's health to zero to trigger an automatic **Ascension**.
+- **Harvest:** Upon ascension, a spirit leaves behind a floating **Relic Orb**. Walking over it adds it to your Sacred Inventory.
 
-### 3.2 Defensive Mercy
-*   **Celestial Step:** A graceful dodge that leaves behind a trail of stardust.
-*   **Sacred Redirection (Parry):** Timing a block perfectly creates a "Burst of Clarity," stopping a spirit's erratic behavior.
-*   **Divine Embrace (Riposte):** When a spirit reaches a state of "Clarity" (Poise Break), the Emissary performs a final purification that allows the spirit to ascend.
+### 3.2 The Sacred Inventory
+- **Tab Key:** Opens the inventory menu.
+- **Dynamic Progression:** Each collected relic provides a stacking passive bonus to the Emissary.
+- **Customization:** View your collection and the total virtues restored to the Nexus.
 
-## 4. Lost Spirits (Formerly Enemies)
-*   **Lost Lamb (Grunt):** Erratically moving spirits. They just need a touch of Grace.
-*   **Weighted Soul (Tank):** Spirits burdened by heavy shadows. Require "Heavy Blessings" to lift their burden.
-*   **The Corrupted Arbiter (Boss):** A guardian who has forgotten their purpose. The goal is to remind them of the Light through a two-phase "Sermon of Motion."
-
-## 5. Visual & Audio Style
-*   **Visual Palette:** Bright Golds, Pure Whites, and Soft Sky Blues. The "Void Purple" is now a "Fog of Confusion" that clears upon purification.
-*   **Feedback:** "Hit-stop" is now a "Moment of Peace." Chromatic aberration represents the "Shift of Perspective."
-*   **Soundscape:** Celestial bells, harps, and deep, resonant humming.
+## 4. Visuals & Feedback
+- **Relic Orbs:** Glowing spheres of light (Gold, Blue, or White) that hover where a spirit was purified.
+- **Inventory Menu:** A clean, celestial parchment-style overlay showing icons and stats for your collected virtues.

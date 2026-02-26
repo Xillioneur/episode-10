@@ -11,7 +11,9 @@ std::vector<Vector3> obstacles;
 Vector3 exitPosition;
 bool exitActive = false;
 std::vector<Particle> particles;
+std::vector<RelicOrb> relicOrbs;
 std::vector<TrailPoint> weaponTrail;
+std::vector<Notification> notifications;
 Camera3D camera = { 0 };
 Shader bloomShader = { 0 };
 RenderTexture2D target = { 0 };
@@ -77,7 +79,16 @@ void InitGame() {
 }
 
 void ResetLevel() {
+    // Persist inventory
+    int mercy = player.mercyRelics;
+    int discipline = player.disciplineRelics;
+    int fortitude = player.fortitudeRelics;
+
     player = {};
+    player.mercyRelics = mercy;
+    player.disciplineRelics = discipline;
+    player.fortitudeRelics = fortitude;
+
     player.position = {0,0,0};
     player.health = MAX_PLAYER_HEALTH;
     player.maxHealth = MAX_PLAYER_HEALTH;
@@ -168,6 +179,7 @@ void ResetLevel() {
             e.attackCooldown = (float)GetRandomValue(0, 100) / 100.0f;
             e.strafeTimer = (float)GetRandomValue(30, 80) / 10.0f;
             e.strafeSide = GetRandomValue(0, 1) == 0 ? -1.0f : 1.0f;
+            e.trait = static_cast<SpiritTrait>(GetRandomValue(0, 4));
 
             int typeRoll = GetRandomValue(0, 100);
             if (typeRoll < 60) { e.type = GRUNT; e.scale = 0.95f; e.health = 180; e.maxHealth = 180; e.poise = 65; e.maxPoise = 65; e.speed = ENEMY_BASE_SPEED * 1.05f; e.bodyColor = {110, 45, 130, 255}; e.attackDamage = 31.0f; e.poiseDamage = 36.0f; e.attackDur = 0.43f; e.dodgeChance = 0.52f; }
@@ -237,33 +249,48 @@ void ResetLevel() {
         exitPosition = {0, 0, 85.0f};
     }
     else if (currentLevel == 3) {
-        // Level 3: Inner Sanctum (Final Boss)
-        player.position = {0, 0, -45.0f};
+        // Level 3: Inner Sanctum (Celestial Cathedral)
+        player.position = {0, 0, -65.0f};
 
-        // Arena circle
-        int numPillars = 20;
-        float radius = 55.0f;
-        for (int i = 0; i < numPillars; i++) {
-            float ang = (float)i / numPillars * 2 * PI;
-            obstacles.push_back({cosf(ang) * radius, 32.0f, sinf(ang) * radius});
+        // Cathedral Nave (Large side pillars)
+        for (int z = -80; z <= 80; z += 20) {
+            float h = (float)GetRandomValue(45, 65);
+            obstacles.push_back({-35.0f, h, (float)z});
+            obstacles.push_back({ 35.0f, h, (float)z});
         }
 
-        // Boss
+        // Circular Apse (Back of arena)
+        int numPillars = 12;
+        float radius = 45.0f;
+        for (int i = 0; i < numPillars; i++) {
+            float ang = (float)i / numPillars * PI; // Semi-circle
+            obstacles.push_back({cosf(ang) * radius, 55.0f, 40.0f + sinf(ang) * 20.0f});
+        }
+
+        // Floating "Halo" Rubble
+        for (int i = 0; i < 25; i++) {
+            float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
+            float r = (float)GetRandomValue(50, 90);
+            float h = (float)GetRandomValue(30, 70);
+            obstacles.push_back({cosf(ang)*r, 100.0f + h, sinf(ang)*r});
+        }
+
+        // The Corrupted Arbiter (Final Form)
         Enemy boss{};
         boss.type = BOSS;
-        boss.position = {0, 0, 45.0f};
+        boss.position = {0, 0, 35.0f};
         boss.homePosition = boss.position;
-        boss.scale = 2.45f;
-        boss.health = 1850;
-        boss.maxHealth = 1850;
-        boss.poise = 380.0f;
-        boss.maxPoise = 380.0f;
-        boss.speed = ENEMY_BASE_SPEED * 0.92f;
+        boss.scale = 2.65f;
+        boss.health = 2200;
+        boss.maxHealth = 2200;
+        boss.poise = 420.0f;
+        boss.maxPoise = 420.0f;
+        boss.speed = ENEMY_BASE_SPEED * 0.95f;
         boss.bodyColor = GOLD;
-        boss.attackDamage = 54.0f;
-        boss.poiseDamage = 78.0f;
-        boss.attackDur = 0.52f;
-        boss.dodgeChance = 0.45f;
+        boss.attackDamage = 58.0f;
+        boss.poiseDamage = 82.0f;
+        boss.attackDur = 0.50f;
+        boss.dodgeChance = 0.48f;
         enemies.push_back(boss);
     }
 
@@ -274,7 +301,16 @@ void ResetLevel() {
 // Core Update & Camera
 // ======================================================================
 void UpdateGame(float dt) {
+    // Notifications should always update to prevent them getting stuck
+    for (auto it = notifications.begin(); it != notifications.end(); ) {
+        it->timer -= GetFrameTime();
+        if (it->timer <= 0) it = notifications.erase(it);
+        else ++it;
+    }
+
     UpdateCamera(dt);
+
+    if (gameState != PLAYING) return;
 
     float effectiveDt = dt;
     if (hitStopTimer > 0.0f) {
@@ -286,6 +322,49 @@ void UpdateGame(float dt) {
     UpdatePlayer(effectiveDt);
     UpdateEnemies(effectiveDt);
     UpdateParticles(effectiveDt);
+
+    // Apply Passive Buffs from Relics
+    player.maxHealth = MAX_PLAYER_HEALTH + (player.fortitudeRelics * 20);
+    player.weapon.poiseDamageMultiplier = 1.0f + (player.disciplineRelics * 0.08f);
+
+    // Update Relic Orbs (Collection)
+    for (auto& orb : relicOrbs) {
+        if (!orb.active) continue;
+        if (Vector3Distance(player.position, orb.pos) < 4.0f) {
+            orb.active = false;
+            
+            Notification n{};
+            n.pos = orb.pos;
+            n.timer = 2.0f;
+            
+            if (orb.type == RELIC_MERCY) {
+                player.mercyRelics++;
+                n.text = "COLLECTED: RELIC OF MERCY";
+                n.color = GOLD;
+            } else if (orb.type == RELIC_DISCIPLINE) {
+                player.disciplineRelics++;
+                n.text = "COLLECTED: RELIC OF DISCIPLINE";
+                n.color = SKYBLUE;
+            } else {
+                player.fortitudeRelics++;
+                n.text = "COLLECTED: RELIC OF FORTITUDE";
+                n.color = WHITE;
+            }
+            
+            // Collection Particles
+            for(int i=0; i<12; i++) {
+                Particle p{};
+                p.position = player.position;
+                p.velocity = { (float)GetRandomValue(-20,20)/10.0f, (float)GetRandomValue(10,30)/10.0f, (float)GetRandomValue(-20,20)/10.0f };
+                p.lifetime = p.maxLife = 0.6f;
+                p.color = n.color;
+                p.size = 0.4f;
+                particles.push_back(p);
+            }
+            
+            notifications.push_back(n);
+        }
+    }
 
     // Update chromatic aberration intensity
     if (bloomShader.id > 0) {

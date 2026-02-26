@@ -22,8 +22,8 @@ void Draw3DScene() {
         }
     }
 
-    // Exit portal only in level 1
-    if (currentLevel == 1) {
+    // Exit portal for Levels 1 and 2
+    if (currentLevel == 1 || currentLevel == 2) {
         Color exitCol = exitActive ? GOLD : DARKGRAY;
         DrawCube(Vector3Add(exitPosition, {0,6.0f,0}), 10.0f, 12.0f, 4.0f, Fade(exitCol, 0.6f));
         DrawSphere(Vector3Add(exitPosition, {0,10.0f,0}), 4.0f, exitCol);
@@ -34,8 +34,29 @@ void Draw3DScene() {
         DrawEnemy(enemies[i], (int)i);
     }
 
+    // Relic Orbs
+    for (const auto& orb : relicOrbs) {
+        if (!orb.active) continue;
+        float pulse = 0.6f + 0.4f * sinf(GetTime() * 6.0f);
+        Color c = (orb.type == RELIC_MERCY) ? GOLD : (orb.type == RELIC_DISCIPLINE ? SKYBLUE : WHITE);
+        DrawSphere(orb.pos, 0.8f * pulse, Fade(c, 0.8f));
+        DrawSphere(orb.pos, 1.1f, Fade(c, 0.2f));
+    }
+
     for (const auto& p : particles) {
         DrawSphere(p.position, p.size, p.color);
+    }
+
+    // Judgment Notifications
+    for (const auto& n : notifications) {
+        float alpha = n.timer / 2.5f;
+        Vector3 labelPos = Vector3Add(n.pos, {0, (1.0f - alpha) * 4.0f, 0});
+        // DrawBillboard(camera, {0}, labelPos, 2.0f, Fade(n.color, alpha)); // Removed buggy line
+        
+        Vector2 screenPos = GetWorldToScreen(labelPos, camera);
+        if (screenPos.x > 0) {
+            DrawText(n.text.c_str(), screenPos.x - MeasureText(n.text.c_str(), 24)/2, screenPos.y, 24, Fade(n.color, alpha));
+        }
     }
 
     // Weapon trail (Grace Ribbon)
@@ -71,10 +92,15 @@ void DrawHUD() {
     // Holy Essence
     DrawText(TextFormat("Holy Essence: %d", player.flasks), 40, 190, 30, SKYBLUE);
 
-    // Lock indicator
-    if (player.lockedTarget != -1) {
-        DrawText("SEEK CLARITY", SCREEN_WIDTH - 320, 30, 36, GOLD);
-        DrawText("Middle Click to Release", SCREEN_WIDTH - 320, 70, 20, LIGHTGRAY);
+    // Inventory Prompt
+    if (gameState == PLAYING) {
+        DrawText("TAB - Sacred Inventory", SCREEN_WIDTH - 320, 30, 24, LIGHTGRAY);
+        for (const auto& orb : relicOrbs) {
+            if (orb.active && Vector3Distance(player.position, orb.pos) < 6.0f) {
+                DrawText("Walk over Relic to Collect", SCREEN_WIDTH/2 - 160, SCREEN_HEIGHT/2 + 100, 24, WHITE);
+                break;
+            }
+        }
     }
 
     // Heavy charge
@@ -108,6 +134,49 @@ void DrawHUD() {
             }
         }
     }
+}
+
+void DrawInventory() {
+    DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.5f));
+    
+    int uiX = SCREEN_WIDTH/2 - 400;
+    int uiY = 120;
+    
+    // Parchment Background
+    DrawRectangle(uiX - 20, uiY - 20, 840, 500, {245, 235, 215, 255}); // Beige Parchment
+    DrawRectangleLinesEx({(float)uiX - 20, (float)uiY - 20, 840, 500}, 6, GOLD); // Gold Border
+    DrawRectangleLinesEx({(float)uiX - 14, (float)uiY - 14, 828, 488}, 2, {160, 140, 100, 255}); // Inner detailed border
+    
+    Color inkCol = {60, 50, 40, 255}; // Dark Brown Ink
+    
+    DrawText("THE BOOK OF LIFE", SCREEN_WIDTH/2 - MeasureText("THE BOOK OF LIFE", 50)/2, uiY + 10, 50, inkCol);
+    DrawText("Virtues Restored to the Celestial Nexus", SCREEN_WIDTH/2 - MeasureText("Virtues Restored to the Celestial Nexus", 24)/2, uiY + 70, 24, {100, 90, 80, 255});
+    
+    int itemY = uiY + 150;
+    // Mercy
+    DrawCircle(uiX + 60, itemY + 25, 28, GOLD);
+    DrawCircleLines(uiX + 60, itemY + 25, 28, inkCol);
+    DrawText("Relics of Mercy", uiX + 110, itemY, 32, inkCol);
+    DrawText(TextFormat("Count: %d", player.mercyRelics), uiX + 110, itemY + 35, 20, DARKGRAY);
+    DrawText("Effect: Increases the potency of Holy Essence.", uiX + 380, itemY + 15, 20, {80, 70, 60, 255});
+    itemY += 100;
+
+    // Discipline
+    DrawCircle(uiX + 60, itemY + 25, 28, SKYBLUE);
+    DrawCircleLines(uiX + 60, itemY + 25, 28, inkCol);
+    DrawText("Relics of Discipline", uiX + 110, itemY, 32, inkCol);
+    DrawText(TextFormat("Count: %d", player.disciplineRelics), uiX + 110, itemY + 35, 20, DARKGRAY);
+    DrawText("Effect: Increases the Clarity impact of Blessings.", uiX + 380, itemY + 15, 20, {80, 70, 60, 255});
+    itemY += 100;
+
+    // Fortitude
+    DrawCircle(uiX + 60, itemY + 25, 28, WHITE);
+    DrawCircleLines(uiX + 60, itemY + 25, 28, inkCol);
+    DrawText("Relics of Fortitude", uiX + 110, itemY, 32, inkCol);
+    DrawText(TextFormat("Count: %d", player.fortitudeRelics), uiX + 110, itemY + 35, 20, DARKGRAY);
+    DrawText("Effect: Strengthens your Spiritual Resolve.", uiX + 380, itemY + 15, 20, {80, 70, 60, 255});
+    
+    DrawText("Press TAB to Close the Book", SCREEN_WIDTH/2 - MeasureText("Press TAB to Close the Book", 24)/2, uiY + 450, 24, inkCol);
 }
 
 void DrawTitleScreen() {
@@ -187,7 +256,7 @@ void DrawDeathScreen() {
 
 void DrawVictoryScreen() {
     DrawRectangle(0,0,SCREEN_WIDTH,SCREEN_HEIGHT, Fade(BLACK, 0.8f));
-    if (currentLevel == 2) {
+    if (currentLevel == 3) {
         DrawText("ALL SOULS ASCENDED!", SCREEN_WIDTH/2 - MeasureText("ALL SOULS ASCENDED!", 80)/2,
                  SCREEN_HEIGHT/2 - 140, 80, WHITE);
         DrawText("THE NEXUS IS RESTORED", SCREEN_WIDTH/2 - MeasureText("THE NEXUS IS RESTORED", 60)/2,

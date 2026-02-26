@@ -78,6 +78,10 @@ void UpdateParticles(float dt) {
              it->velocity.y += 0.8f * dt; 
              it->velocity.x *= 0.98f;
              it->velocity.z *= 0.98f;
+        } else if (it->color.r == 40 && it->color.b == 60) {
+            // Sinister Descent (Drag down)
+            it->velocity.y -= 12.0f * dt;
+            it->size *= 0.98f;
         } else {
             it->velocity.y -= 3.5f * dt;
         }

@@ -49,10 +49,11 @@ void ApplyEnemyHitToPlayer(const Enemy& e) {
     float knockMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 1.8f : 1.3f)
                                       : (e.isHeavyAttack ? 1.5f : 1.0f);
 
-    int damage = (int)(e.attackDamage * dmgMult);
+    float damage = e.attackDamage * dmgMult;
     float poiseDmg = e.poiseDamage * poiseMult;
 
     player.health -= damage;
+    const_cast<Enemy&>(e).karma = std::max(0.0f, e.karma - 15.0f);
     player.hitInvuln = 0.5f;
     player.velocity = Vector3Add(player.velocity, Vector3Scale(norm, 12.0f * knockMult));
 
@@ -186,6 +187,18 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
     if (e.health <= 0) {
         e.alive = false;
         SpawnAscensionParticles(e.position);
+        
+        // Drop Relic
+        RelicOrb orb{};
+        orb.pos = Vector3Add(e.position, {0, 1.5f, 0});
+        orb.active = true;
+        
+        if (e.trait == TRAIT_COMPASSIONATE) orb.type = RELIC_MERCY;
+        else if (e.trait == TRAIT_CRUEL || e.trait == TRAIT_WRATHFUL) orb.type = RELIC_DISCIPLINE;
+        else orb.type = RELIC_FORTITUDE;
+        
+        relicOrbs.push_back(orb);
+
         if (player.lockedTarget != -1 && &enemies[player.lockedTarget] == &e) {
             player.lockedTarget = -1;
         }
@@ -228,6 +241,17 @@ void UpdateEnemies(float dt) {
             e.windupTimer -= dt;
             e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 8.0f * dt);
             
+            // Physical windup pose (PULL BACK AND UP)
+            float baseWindup = (e.type == BOSS) ? ((e.isPhase2) ? 0.32f : 0.48f) : ((e.type == AGILE) ? 0.32f : 0.52f);
+            if (e.isHeavyAttack) baseWindup *= 1.6f;
+            
+            // Negative pitch is UP, Yaw > 150 is BACK
+            float targetPitch = (e.type == BOSS) ? -135.0f : -95.0f;
+            float targetYaw = (e.type == BOSS) ? 190.0f : 165.0f;
+
+            e.swingPitch = Lerp(e.swingPitch, targetPitch, 14.0f * dt);
+            e.swingYaw = Lerp(e.swingYaw, targetYaw, 14.0f * dt);
+
             // Visual feedback during windup (face player)
             Vector3 toP = Vector3Subtract(player.position, e.position);
             if (Vector3Length(toP) > 0.1f) {
@@ -303,6 +327,26 @@ void UpdateEnemies(float dt) {
                         particles.push_back(p);
                     }
                 }
+
+                // Divine Radiance Aura (Proximity sap)
+                static float radiancePulseTimer = 0.0f;
+                radiancePulseTimer += dt;
+                if (radiancePulseTimer > 0.25f) {
+                    radiancePulseTimer = 0.0f;
+                    if (distToPlayer < 18.0f && !player.isDead) {
+                        player.health -= 3;
+                        // Visual cue for aura
+                        for(int i=0; i<3; i++) {
+                            Particle p{};
+                            p.position = Vector3Add(e.position, {(float)GetRandomValue(-10,10), (float)GetRandomValue(0,8), (float)GetRandomValue(-10,10)});
+                            p.velocity = {0, 2.0f, 0};
+                            p.lifetime = p.maxLife = 0.8f;
+                            p.color = Fade(WHITE, 0.4f);
+                            p.size = 0.6f;
+                            particles.push_back(p);
+                        }
+                    }
+                }
             }
 
             if (e.isPhase2) moveSpeed *= 1.35f;
@@ -324,14 +368,16 @@ void UpdateEnemies(float dt) {
             
             if (distToPlayer <= range && dot > 0.5f && !e.isAttacking && !e.isWindingUp && e.comboDelayTimer <= 0.0f && e.stamina >= 25.0f) {
                 e.comboStep = (e.comboStep % 5) + 1;
-                // Faster combos in phase 2
-                float cd = (e.isPhase2) ? 0.8f : 2.2f;
-                if (e.comboStep == 1) e.comboDelayTimer = cd;
+                
+                // Long recovery only after the full combo
+                if (e.comboStep == 5) {
+                    float cd = (e.isPhase2) ? 1.2f : 2.8f;
+                    e.comboDelayTimer = cd;
+                }
                 
                 e.isWindingUp = true;
-                e.windupTimer = (e.isPhase2) ? 0.35f : 0.55f;
+                e.windupTimer = (e.isPhase2) ? 0.32f : 0.48f;
                 
-                // Pre-set attack type for windup pose logic if needed
                 e.stamina -= 25.0f;
                 e.staminaRegenDelay = 1.0f;
             }
@@ -505,19 +551,19 @@ void UpdateEnemies(float dt) {
             // Boss combo animations
             if (e.type == BOSS) {
                 switch(e.comboStep) {
-                    case 1: e.swingYaw = Lerp(80.0f, -80.0f, progress);
-                            e.swingPitch = Lerp(90.0f, -70.0f, progress); break;
-                    case 2: e.swingYaw = Lerp(-120.0f, 120.0f, progress);
-                            e.swingPitch = Lerp(40.0f, -40.0f, progress); break;
-                    case 3: e.swingYaw = Lerp(-180.0f, 180.0f, progress);
-                            e.swingPitch = Lerp(0.0f, 0.0f, progress); break;
-                    case 4: e.swingYaw = Lerp(60.0f, -60.0f, progress);
-                            e.swingPitch = Lerp(-100.0f, 100.0f, progress); break;
+                    case 1: e.swingYaw = Lerp(190.0f, -80.0f, progress);
+                            e.swingPitch = Lerp(-135.0f, 90.0f, progress); break;
+                    case 2: e.swingYaw = Lerp(190.0f, 120.0f, progress);
+                            e.swingPitch = Lerp(-135.0f, 40.0f, progress); break;
+                    case 3: e.swingYaw = Lerp(190.0f, 180.0f, progress);
+                            e.swingPitch = Lerp(-135.0f, 0.0f, progress); break;
+                    case 4: e.swingYaw = Lerp(190.0f, -60.0f, progress);
+                            e.swingPitch = Lerp(-135.0f, 100.0f, progress); break;
                     case 5: {
                         float pp = progress * 3.0f;
                         if (pp < 1.0f) {
-                            e.swingYaw = Lerp(100.0f, -100.0f, pp);
-                            e.swingPitch = Lerp(160.0f, -110.0f, pp);
+                            e.swingYaw = Lerp(190.0f, -100.0f, pp);
+                            e.swingPitch = Lerp(-135.0f, 160.0f, pp);
                         } else if (pp < 2.0f) {
                             e.swingYaw = Lerp(-100.0f, 200.0f, pp - 1.0f);
                             e.swingPitch = -110.0f;
@@ -529,14 +575,14 @@ void UpdateEnemies(float dt) {
                 }
             } else {
                 if (e.currentAttack == LIGHT_1) {
-                    e.swingPitch = Lerp(110.0f, -95.0f, progress);
-                    e.swingYaw = Lerp(80.0f, -80.0f, progress);
+                    e.swingPitch = Lerp(-95.0f, 90.0f, progress);
+                    e.swingYaw = Lerp(165.0f, -60.0f, progress);
                 } else if (e.currentAttack == LIGHT_2) {
-                    e.swingPitch = Lerp(30.0f, -30.0f, progress);
-                    e.swingYaw = Lerp(-170.0f, 170.0f, progress);
+                    e.swingPitch = Lerp(-95.0f, 20.0f, progress);
+                    e.swingYaw = Lerp(165.0f, 320.0f, progress);
                 } else {
-                    e.swingPitch = Lerp(-90.0f, 125.0f, progress);
-                    e.swingYaw = Lerp(-70.0f, 90.0f, progress);
+                    e.swingPitch = Lerp(-95.0f, 110.0f, progress);
+                    e.swingYaw = Lerp(165.0f, 40.0f, progress);
                 }
             }
 
@@ -566,6 +612,7 @@ void UpdateEnemies(float dt) {
                 if (IsEnemyAttackSwingHittingPlayer(e)) {
                     if (player.isParrying && player.parryTimer > 0.12f) {
                         player.riposteTimer = 1.8f;
+                        e.karma = std::min(100.0f, e.karma + 20.0f);
                         e.stunTimer = 2.8f;
                         Vector3 knockDir = Vector3Normalize(Vector3Subtract(e.position, player.position));
                         e.velocity = Vector3Add(e.velocity, Vector3Scale(knockDir, 28.0f));
@@ -613,31 +660,55 @@ void DrawEnemy(const Enemy& e, int index) {
     rlScalef(e.scale, e.scale, e.scale);
 
     Color infernalRed = {90, 30, 120, 255}; // Obsidian Purple (More realistic than pure red)
-    Color infernalAsh = {25, 25, 30, 255};  // Shadow Gray
-    Color moltenEmber = {255, 80, 30, 255}; // Complementary Ember
+    Color divineAsh = {30, 35, 50, 255};    // Deep Void
+    Color celestialSky = {100, 180, 240, 255}; // Celestial Blue
     Color body = e.bodyColor;
     
     if (!e.alive) body = {180, 200, 220, 255}; // Purified Silver-Blue
+    else if (e.health <= 0) {
+        float pulse = 0.6f + 0.4f * sinf(GetTime() * 45.0f); // Intense pulse
+        body = ColorAlphaBlend(e.bodyColor, GOLD, Fade(WHITE, pulse));
+    }
     else if (e.isWindingUp) {
-        float pulse = 0.5f + 0.5f * sinf(GetTime() * 30.0f);
+        float pulse = 0.35f + 0.35f * sinf(GetTime() * 18.0f); // Slower, more subtle pulse
         body = ColorAlphaBlend(e.bodyColor, WHITE, Fade(WHITE, pulse));
     }
     else if (e.stunTimer > 0 || e.flinchTimer > 0) body = {255, 255, 255, 255};
     else if (e.isBlocking) body = {60, 70, 90, 255}; // Iron Guard
-    else if (e.isDodging) body = moltenEmber;
+    else if (e.isDodging) body = celestialSky;
 
     if (e.type == BOSS) {
-        // High Demon / Arch-Fiend
-        DrawCube({0, 1.2f, 0}, 2.4f, 3.8f, 1.8f, infernalAsh);
-        DrawSphere({0, 3.8f, 0}, 0.9f, infernalRed);
-        // Horns
-        DrawCylinderEx({-0.5f, 4.2f, 0}, {-1.8f, 6.2f, 0.5f}, 0.3f, 0.05f, 8, {15, 15, 20, 255});
-        DrawCylinderEx({ 0.5f, 4.2f, 0}, { 1.8f, 6.2f, 0.5f}, 0.3f, 0.05f, 8, {15, 15, 20, 255});
-        // Spikes on back
-        DrawCylinderEx({0, 1.8f, -0.8f}, {0, 4.5f, -1.5f}, 0.4f, 0.0f, 6, infernalAsh);
+        // Celestial Arbiter Form
+        DrawCube({0, 1.2f, 0}, 2.4f, 3.8f, 1.8f, divineAsh);
+        DrawSphere({0, 3.8f, 0}, 0.9f, GOLD); // Golden Head
+
+        // Halo Crown
+        float haloPulse = 0.6f + 0.4f * sinf(GetTime() * 3.0f);
+        DrawCircle3D({0, 4.8f, 0}, 1.2f, {1,0,0}, 90, Fade(GOLD, haloPulse));
+        DrawCircle3D({0, 4.8f, 0}, 1.3f, {1,0,0}, 90, Fade(WHITE, haloPulse * 0.5f));
+
+        // Sacred Wings (Phase 2)
+        if (e.isPhase2 && e.alive) {
+            float wingPulse = 0.7f + 0.3f * sinf(GetTime() * 4.0f);
+            Color wingCol = Fade(WHITE, wingPulse * 0.6f);
+
+            // Left Wing
+            rlPushMatrix();
+            rlRotatef(25 + sinf(GetTime()*2)*10, 0, 0, 1);
+            DrawTriangle3D({-0.5f, 2.5f, -0.2f}, {-6.0f, 5.0f, -1.5f}, {-1.5f, 0.5f, -0.5f}, wingCol);
+            rlPopMatrix();
+
+            // Right Wing
+            rlPushMatrix();
+            rlRotatef(-25 - sinf(GetTime()*2)*10, 0, 0, 1);
+            DrawTriangle3D({0.5f, 2.5f, -0.2f}, {1.5f, 0.5f, -0.5f}, {6.0f, 5.0f, -1.5f}, wingCol);
+            rlPopMatrix();
+        }
     } else {
-        DrawCylinderEx({-0.4f, -0.9f, 0}, {-0.4f, 1.0f, 0}, 0.5f, 0.4f, 12, infernalAsh);
-        DrawCylinderEx({ 0.4f, -0.9f, 0}, { 0.4f, 1.0f, 0}, 0.5f, 0.4f, 12, infernalAsh);
+        Color legCol = {30, 35, 50, 255}; // Deep Void
+        DrawCylinderEx({-0.4f, -0.9f, 0}, {-0.4f, 1.0f, 0}, 0.5f, 0.4f, 12, legCol);
+        DrawCylinderEx({ 0.4f, -0.9f, 0}, { 0.4f, 1.0f, 0}, 0.5f, 0.4f, 12, legCol);
+
         DrawCube({0, 0.9f, 0}, 1.7f, 2.9f, 1.3f, body);
         DrawSphere({0, 2.4f, 0}, 0.62f, Fade(body, 0.8f));
 
@@ -660,9 +731,16 @@ void DrawEnemy(const Enemy& e, int index) {
         rlRotatef(e.swingPitch, 1, 0, 0);
         float bladeLen = (e.type == BOSS) ? 9.5f : 5.8f;
         DrawCylinderEx({0, -0.3f, 0}, {0, -1.0f, 0}, 0.18f, 0.18f, 12, {40, 35, 30, 255});
-        // Fiery blade (Realistic gradient approximation)
-        DrawCube({0, 0.0f, 2.9f}, 0.14f, 0.7f, bladeLen, {180, 60, 20, 255}); // Dark Ember
-        DrawCube({0, 0.0f, 2.9f}, 0.08f, 0.4f, bladeLen + 0.2f, moltenEmber); // Bright core
+        // Radiance Scepter
+        Color scepterCol = (e.type == BOSS) ? GOLD : (Color){180, 60, 20, 255};
+        Color coreCol = (e.type == BOSS) ? (Color)WHITE : celestialSky;
+        if (e.type == BOSS) {
+            DrawCube({0, 0.0f, 2.9f}, 0.22f, 0.8f, bladeLen, scepterCol); 
+            DrawCube({0, 0.0f, 2.9f}, 0.12f, 0.5f, bladeLen + 0.4f, coreCol); 
+        } else {
+            DrawCube({0, 0.0f, 2.9f}, 0.14f, 0.7f, bladeLen, scepterCol);
+            DrawCube({0, 0.0f, 2.9f}, 0.08f, 0.4f, bladeLen + 0.2f, coreCol);
+        }
         rlPopMatrix();
     }
 

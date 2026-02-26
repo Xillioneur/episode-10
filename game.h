@@ -52,7 +52,17 @@ const float COLLISION_RADIUS_BASE = 6.8f;
 // ======================================================================
 // Enums
 // ======================================================================
-enum GameState { TITLE_SCREEN, INSTRUCTIONS, PLAYING, PAUSED, DEAD, VICTORY };enum EnemyType { GRUNT, TANK, AGILE, BOSS };
+enum GameState { TITLE_SCREEN, INSTRUCTIONS, PLAYING, INVENTORY, PAUSED, DEAD, VICTORY };
+
+enum SpiritTrait { TRAIT_COMPASSIONATE, TRAIT_CRUEL, TRAIT_GREEDY, TRAIT_FAITHFUL, TRAIT_WRATHFUL };
+enum RelicType { RELIC_MERCY, RELIC_DISCIPLINE, RELIC_FORTITUDE };
+
+struct RelicOrb {
+    Vector3 pos;
+    RelicType type;
+    bool active;
+};
+enum EnemyType { GRUNT, TANK, AGILE, BOSS };
 enum EnemyState { PATROL, ALERT, CHASE, SEARCH, STAGGERED };
 enum AttackType { LIGHT_1, LIGHT_2, LIGHT_3, HEAVY, DASH_ATTACK };
 
@@ -101,8 +111,8 @@ struct Player {
     Vector3 rollDirection {0,0,0};
     bool isParrying = false;
     float parryTimer = 0.0f;
-    int health = MAX_PLAYER_HEALTH;
-    int maxHealth = MAX_PLAYER_HEALTH;
+    float health = MAX_PLAYER_HEALTH;
+    float maxHealth = MAX_PLAYER_HEALTH;
     float stamina = MAX_STAMINA;
     float staminaRegenDelay = 0.0f;
     int flasks = MAX_FLASKS;
@@ -123,6 +133,19 @@ struct Player {
     float healTimer = 0.0f;
     float perfectRollTimer = 0.0f;
     float riposteTimer = 0.0f;
+
+    // Sacred Inventory
+    int mercyRelics = 0;
+    int disciplineRelics = 0;
+    int fortitudeRelics = 0;
+    float lastInventoryKeyTime = 0.0f;
+};
+
+struct Notification {
+    std::string text;
+    Vector3 pos;
+    float timer;
+    Color color;
 };
 
 struct Enemy {
@@ -176,6 +199,10 @@ struct Enemy {
     bool isPhase2 = false;
     float phaseTransitionTimer = 0.0f;
     bool hasTriggeredPhase2 = false;
+
+    // Karma system
+    float karma = 50.0f;
+    SpiritTrait trait = TRAIT_FAITHFUL;
 };
 
 // ======================================================================
@@ -189,7 +216,9 @@ extern std::vector<Vector3> obstacles;
 extern Vector3 exitPosition;
 extern bool exitActive;
 extern std::vector<Particle> particles;
+extern std::vector<RelicOrb> relicOrbs;
 extern std::vector<TrailPoint> weaponTrail;
+extern std::vector<Notification> notifications;
 extern Camera3D camera;
 extern Shader bloomShader;
 extern RenderTexture2D target;
@@ -212,6 +241,7 @@ void Draw3DScene();
 void DrawPlayer();
 void DrawEnemy(const Enemy& e, int index);
 void DrawHUD();
+void DrawInventory();
 void DrawTitleScreen();
 void DrawInstructionsScreen();
 void DrawDeathScreen();
