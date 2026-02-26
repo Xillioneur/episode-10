@@ -138,6 +138,8 @@ struct Enemy {
     float maxPoise = 80.0f;
     bool alive = true;
     bool isAttacking = false;
+    bool isWindingUp = false;
+    float windupTimer = 0.0f;
     float attackTimer = 0.0f;
     AttackType currentAttack = LIGHT_1;
     bool isHeavyAttack = false;

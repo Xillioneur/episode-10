@@ -107,48 +107,49 @@ void ResetLevel() {
     }
 
     if (currentLevel == 1) {
-        // Celestial Ruins (Structured clusters)
+        // Level 1: Garden of Serenity (Organic Clusters)
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dis(-border+20, border-20);
+        std::uniform_real_distribution<float> dis(-border+25, border-25);
 
-        for (int c = 0; c < 15; c++) {
+        // Circular clusters to create "Islands"
+        for (int c = 0; c < 18; c++) {
             float cx = dis(gen);
             float cz = dis(gen);
-            if (Vector3Distance({cx, 0, cz}, {0, 0, 0}) < 20.0f) continue;
+            if (Vector3Distance({cx, 0, cz}, {0, 0, 0}) < 22.0f) continue;
 
-            int clusterSize = GetRandomValue(3, 7);
+            int clusterSize = GetRandomValue(4, 9);
+            float clusterRadius = (float)GetRandomValue(6, 14);
             for (int i = 0; i < clusterSize; i++) {
-                float ox = (float)GetRandomValue(-12, 12);
-                float oz = (float)GetRandomValue(-12, 12);
-                float height = (float)GetRandomValue(12, 28);
-                obstacles.push_back({cx + ox, height, cz + oz});
+                float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
+                float dist = (float)GetRandomValue(0, (int)clusterRadius);
+                float h = (float)GetRandomValue(10, 32);
+                obstacles.push_back({cx + cosf(ang)*dist, h, cz + sinf(ang)*dist});
             }
         }
 
-        // Floating Debris
-        for (int i = 0; i < 40; i++) {
+        // Floating Debris (Atmosphere)
+        for (int i = 0; i < 50; i++) {
             float dx = dis(gen);
             float dz = dis(gen);
-            float dy = (float)GetRandomValue(15, 45);
-            // Height > 100 signal for floating debris in renderer
+            float dy = (float)GetRandomValue(18, 55);
             obstacles.push_back({dx, 100.0f + dy, dz}); 
         }
 
-        // Enemies
-        const int MAX_ENEMIES = 14;
+        // Enemies (Reduced count for higher quality encounters)
+        const int MAX_ENEMIES = 6;
         for (int i = 0; i < MAX_ENEMIES; i++) {
             Vector3 pos;
             bool valid = false;
             int attempts = 0;
-            while (!valid && attempts < 60) {
+            while (!valid && attempts < 80) {
                 attempts++;
                 float angle = GetRandomValue(0, 359) * DEG2RAD;
-                float dist = GetRandomValue(18, 75);
+                float dist = GetRandomValue(20, 75);
                 pos = { cosf(angle)*dist, 0, sinf(angle)*dist };
-                valid = Vector3Distance(pos, {0,0,0}) > 16.0f;
+                valid = Vector3Distance(pos, {0,0,0}) > 18.0f;
                 for (const auto& obs : obstacles) {
-                    if (Vector3Distance(pos, obs) < 9.0f) {
+                    if (obs.y < 100.0f && Vector3Distance(pos, {obs.x, 0, obs.z}) < 10.0f) {
                         valid = false;
                         break;
                     }
@@ -160,7 +161,7 @@ void ResetLevel() {
             e.position = pos;
             e.homePosition = pos;
             e.patrolTarget = pos;
-            e.patrolRadius = GetRandomValue(16, 32);
+            e.patrolRadius = GetRandomValue(18, 35);
             e.alive = true;
             e.swingYaw = 30.0f;
             e.swingPitch = -30.0f;
@@ -169,88 +170,100 @@ void ResetLevel() {
             e.strafeSide = GetRandomValue(0, 1) == 0 ? -1.0f : 1.0f;
 
             int typeRoll = GetRandomValue(0, 100);
-            if (typeRoll < 45) {
-                e.type = GRUNT; // Lesser Imp
-                e.scale = 0.95f;
-                e.health = 180; e.maxHealth = 180;
-                e.poise = 65; e.maxPoise = 65;
-                e.speed = ENEMY_BASE_SPEED * 1.05f;
-                e.bodyColor = {110, 45, 130, 255}; // Desaturated Void Purple
-                e.attackDamage = 31.0f;
-                e.poiseDamage = 36.0f;
-                e.attackDur = 0.43f;
-                e.dodgeChance = 0.52f;
-            }
-            else if (typeRoll < 80) {
-                e.type = TANK; // Hell-Guard
-                e.scale = 1.28f;
-                e.health = 340; e.maxHealth = 340;
-                e.poise = 160; e.maxPoise = 160;
-                e.speed = ENEMY_BASE_SPEED * 0.82f;
-                e.bodyColor = {35, 35, 40, 255}; // Cold Charcoal
-                e.patrolRadius *= 0.7f;
-                e.attackDamage = 46.0f;
-                e.poiseDamage = 60.0f;
-                e.attackDur = 0.60f;
-                e.dodgeChance = 0.25f;
-            }
-            else {
-                e.type = AGILE; // Shadow Stalker
-                e.scale = 1.05f;
-                e.health = 160; e.maxHealth = 160;
-                e.poise = 55; e.maxPoise = 55;
-                e.speed = ENEMY_BASE_SPEED * 1.25f;
-                e.bodyColor = {45, 40, 80, 255}; // Shadow Indigo
-                e.attackDamage = 27.0f;
-                e.poiseDamage = 32.0f;
-                e.attackDur = 0.36f;
-                e.dodgeChance = 0.82f;
-            }
+            if (typeRoll < 60) { e.type = GRUNT; e.scale = 0.95f; e.health = 180; e.maxHealth = 180; e.poise = 65; e.maxPoise = 65; e.speed = ENEMY_BASE_SPEED * 1.05f; e.bodyColor = {110, 45, 130, 255}; e.attackDamage = 31.0f; e.poiseDamage = 36.0f; e.attackDur = 0.43f; e.dodgeChance = 0.52f; }
+            else { e.type = AGILE; e.scale = 1.05f; e.health = 160; e.maxHealth = 160; e.poise = 55; e.maxPoise = 55; e.speed = ENEMY_BASE_SPEED * 1.25f; e.bodyColor = {45, 40, 80, 255}; e.attackDamage = 27.0f; e.poiseDamage = 32.0f; e.attackDur = 0.36f; e.dodgeChance = 0.82f; }
             enemies.push_back(e);
         }
 
-        // Exit portal position
+        // Exit portal
         do {
-            exitPosition.x = GetRandomValue(-border+25, border-25);
-            exitPosition.z = GetRandomValue(-border+25, border-25);
-        } while (Vector3Distance(exitPosition, {0,0,0}) < 55.0f);
+            exitPosition.x = GetRandomValue(-border+30, border-30);
+            exitPosition.z = GetRandomValue(-border+30, border-30);
+        } while (Vector3Distance(exitPosition, {0,0,0}) < 60.0f);
         exitPosition.y = 0;
     }
     else if (currentLevel == 2) {
-        player.position = {0, 0, -35.0f};
+        // Level 2: Astral Courtyard (Spacious & Organic)
+        player.position = {0, 0, -75.0f};
+        
+        // Circular Layout with inner hubs
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dis(-border+30, border-30);
 
-        // Boss arena pillars
-        int numPillars = 16;
-        float radius = 45.0f;
+        // Large Sacred Monoliths
+        for (int i = 0; i < 14; i++) {
+            float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
+            float dist = (float)GetRandomValue(25, 70);
+            float h = (float)GetRandomValue(20, 45);
+            obstacles.push_back({cosf(ang)*dist, h, sinf(ang)*dist});
+        }
+
+        // Small Prayer Altars (lower cover)
+        for (int i = 0; i < 25; i++) {
+            float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
+            float dist = (float)GetRandomValue(15, 65);
+            obstacles.push_back({cosf(ang)*dist, 10.0f, sinf(ang)*dist});
+        }
+
+        // Floating Sanctuary Platforms
+        for (int i = 0; i < 30; i++) {
+            float dx = dis(gen);
+            float dz = dis(gen);
+            float dy = (float)GetRandomValue(25, 60);
+            obstacles.push_back({dx, 100.0f + dy, dz}); 
+        }
+
+        // Tough Guard Souls (Reduced count, increased intelligence)
+        for (int i = 0; i < 3; i++) {
+            float ang = (float)i / 7.0f * 2.0f * PI;
+            float r = 40.0f;
+            Enemy e{};
+            e.type = TANK;
+            e.position = {cosf(ang)*r, 0, sinf(ang)*r};
+            e.homePosition = e.position;
+            e.patrolTarget = e.position;
+            e.patrolRadius = 15.0f; // Much larger patrol area
+            e.alive = true;
+            e.scale = 1.35f;
+            e.health = 420; e.maxHealth = 420;
+            e.poise = 180; e.maxPoise = 180;
+            e.speed = ENEMY_BASE_SPEED * 0.85f;
+            e.bodyColor = {35, 35, 40, 255};
+            e.attackDamage = 52.0f; e.poiseDamage = 65.0f; e.attackDur = 0.62f; e.dodgeChance = 0.2f;
+            enemies.push_back(e);
+        }
+
+        exitPosition = {0, 0, 85.0f};
+    }
+    else if (currentLevel == 3) {
+        // Level 3: Inner Sanctum (Final Boss)
+        player.position = {0, 0, -45.0f};
+
+        // Arena circle
+        int numPillars = 20;
+        float radius = 55.0f;
         for (int i = 0; i < numPillars; i++) {
             float ang = (float)i / numPillars * 2 * PI;
-            Vector3 pos = {cosf(ang) * radius, 0, sinf(ang) * radius};
-            obstacles.push_back(pos);
-        }
-        numPillars = 8;
-        radius = 20.0f;
-        for (int i = 0; i < numPillars; i++) {
-            float ang = (float)i / numPillars * 2 * PI + PI / 16.0f;
-            Vector3 pos = {cosf(ang) * radius, 0, sinf(ang) * radius};
-            obstacles.push_back(pos);
+            obstacles.push_back({cosf(ang) * radius, 32.0f, sinf(ang) * radius});
         }
 
         // Boss
         Enemy boss{};
         boss.type = BOSS;
-        boss.position = {0, 0, 40.0f};
+        boss.position = {0, 0, 45.0f};
         boss.homePosition = boss.position;
-        boss.scale = 2.3f;
-        boss.health = 1600;
-        boss.maxHealth = 1600;
-        boss.poise = 320.0f;
-        boss.maxPoise = 320.0f;
-        boss.speed = ENEMY_BASE_SPEED * 0.88f;
-        boss.bodyColor = {251, 188, 5, 255}; // Google Yellow
-        boss.attackDamage = 48.0f;
-        boss.poiseDamage = 72.0f;
-        boss.attackDur = 0.55f;
-        boss.dodgeChance = 0.35f;
+        boss.scale = 2.45f;
+        boss.health = 1850;
+        boss.maxHealth = 1850;
+        boss.poise = 380.0f;
+        boss.maxPoise = 380.0f;
+        boss.speed = ENEMY_BASE_SPEED * 0.92f;
+        boss.bodyColor = GOLD;
+        boss.attackDamage = 54.0f;
+        boss.poiseDamage = 78.0f;
+        boss.attackDur = 0.52f;
+        boss.dodgeChance = 0.45f;
         enemies.push_back(boss);
     }
 
@@ -299,9 +312,9 @@ void UpdateGame(float dt) {
     int aliveCount = 0;
     for (const auto& e : enemies) if (e.alive) aliveCount++;
 
-    if (currentLevel == 1) {
+    if (currentLevel == 1 || currentLevel == 2) {
         exitActive = (aliveCount == 0);
-    } else if (currentLevel == 2 && aliveCount == 0 && gameState == PLAYING) {
+    } else if (currentLevel == 3 && aliveCount == 0 && gameState == PLAYING) {
         gameState = VICTORY;
     }
 }

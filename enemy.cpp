@@ -196,13 +196,55 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
 }
 
 void UpdateEnemies(float dt) {
-    for (auto& e : enemies) {
+    // AI Coordination Pass
+    int activeAttackers = 0;
+    for (const auto& e : enemies) {
+        if (e.alive && (e.isAttacking || e.isWindingUp)) activeAttackers++;
+    }
+
+    for (size_t i = 0; i < enemies.size(); i++) {
+        Enemy& e = enemies[i];
         if (!e.alive) continue;
 
         e.hitInvuln -= dt;
         e.stunTimer -= dt;
         e.flinchTimer -= dt;
         e.staminaRegenDelay -= dt;
+
+        Vector3 toPlayer = Vector3Subtract(player.position, e.position);
+        float distToPlayer = Vector3Length(toPlayer);
+        bool seesPlayer = (distToPlayer < 65.0f && CanSeePlayer(e));
+
+        // Tactical distance goals
+        float idealDist = (e.type == TANK) ? 8.5f : (e.type == AGILE ? 13.0f : 10.5f);
+        if (activeAttackers >= 2 && !e.isAttacking && !e.isWindingUp) {
+            idealDist += 10.0f; // Back off if others are busy
+        }
+        if (player.isCharging && distToPlayer < 15.0f) {
+            idealDist += 12.0f; // Fear the Sermon of Light
+        }
+
+        if (e.isWindingUp) {
+            e.windupTimer -= dt;
+            e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 8.0f * dt);
+            
+            // Visual feedback during windup (face player)
+            Vector3 toP = Vector3Subtract(player.position, e.position);
+            if (Vector3Length(toP) > 0.1f) {
+                e.rotation = atan2f(toP.x, toP.z) * RAD2DEG;
+            }
+
+            if (e.windupTimer <= 0.0f) {
+                e.isWindingUp = false;
+                e.isAttacking = true;
+                
+                float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.85f : 0.55f)
+                                            : e.attackDur * (e.isHeavyAttack ? 1.75f : 1.0f);
+                if (e.type == BOSS && e.isPhase2) dur *= 0.75f;
+                e.attackTimer = dur;
+            }
+            continue; // Skip movement while winding up
+        }
         if (e.staminaRegenDelay <= 0) {
             e.stamina = std::min(e.stamina + 32.0f * dt, (float)MAX_STAMINA);
         }
@@ -211,11 +253,6 @@ void UpdateEnemies(float dt) {
             e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 10.0f * dt);
             continue;
         }
-
-        bool seesPlayer = CanSeePlayer(e);
-        Vector3 toPlayer = Vector3Subtract(player.position, e.position);
-        toPlayer.y = 0.0f;
-        float distToPlayer = Vector3Length(toPlayer);
 
         Vector3 moveDir{0,0,0};
         float moveSpeed = e.speed * (e.stamina <= 0.0f ? EXHAUSTED_MULTIPLIER : 1.0f);
@@ -285,16 +322,16 @@ void UpdateEnemies(float dt) {
             float dot = Vector3DotProduct(eFacing, Vector3Normalize(toPlayer));
             float range = (e.isPhase2) ? ATTACK_RANGE + 7.5f : ATTACK_RANGE + 5.0f;
             
-            if (distToPlayer <= range && dot > 0.5f && !e.isAttacking && e.comboDelayTimer <= 0.0f && e.stamina >= 25.0f) {
+            if (distToPlayer <= range && dot > 0.5f && !e.isAttacking && !e.isWindingUp && e.comboDelayTimer <= 0.0f && e.stamina >= 25.0f) {
                 e.comboStep = (e.comboStep % 5) + 1;
                 // Faster combos in phase 2
                 float cd = (e.isPhase2) ? 0.8f : 2.2f;
                 if (e.comboStep == 1) e.comboDelayTimer = cd;
                 
-                e.isAttacking = true;
-                float dur = (e.comboStep == 3 || e.comboStep == 5) ? 0.85f : 0.55f;
-                if (e.isPhase2) dur *= 0.75f; // Faster swings
-                e.attackTimer = dur;
+                e.isWindingUp = true;
+                e.windupTimer = (e.isPhase2) ? 0.35f : 0.55f;
+                
+                // Pre-set attack type for windup pose logic if needed
                 e.stamina -= 25.0f;
                 e.staminaRegenDelay = 1.0f;
             }
@@ -345,41 +382,39 @@ void UpdateEnemies(float dt) {
                     e.rotation = atan2f(toPlayer.x, toPlayer.z) * RAD2DEG;
                 }
 
-                if (distToPlayer > 45.0f) {
+                if (distToPlayer > idealDist + 2.0f) {
                     moveDir = Vector3Normalize(toPlayer);
+                } else if (distToPlayer < idealDist - 2.0f) {
+                    moveDir = Vector3Scale(Vector3Normalize(toPlayer), -1.0f);
                 } else {
+                    // Circle player based on index to flank
                     Vector3 forward = Vector3Normalize(toPlayer);
                     Vector3 tangent = {forward.z, 0.0f, -forward.x};
-                    tangent = Vector3Scale(tangent, e.strafeSide);
-                    float forwardAmt = (distToPlayer > ATTACK_RANGE + 3.0f) ? 0.6f : 0.3f;
-                    float strafeAmt = 0.7f;
-                    if (e.type == TANK) {
-                        forwardAmt = (distToPlayer > ATTACK_RANGE + 3.0f) ? 0.8f : 0.6f;
-                        strafeAmt = 0.3f;
-                    } else if (e.type == AGILE) {
-                        forwardAmt = (distToPlayer > ATTACK_RANGE + 3.0f) ? 0.4f : 0.1f;
-                        strafeAmt = 0.9f;
-                        moveSpeed *= 1.15f;
-                    }
-                    moveDir = Vector3Add(Vector3Scale(forward, forwardAmt), Vector3Scale(tangent, strafeAmt));
-                    if (Vector3Length(moveDir) > 0.01f) moveDir = Vector3Normalize(moveDir);
-                    moveSpeed *= 0.85f;
+                    float circleDir = (i % 2 == 0) ? 1.0f : -1.0f;
+                    moveDir = Vector3Scale(tangent, circleDir);
                 }
+                moveSpeed *= 0.95f;
             }
 
-            // Attack decision
+            // Coordinated Attack decision
             Vector3 eFacing = {sinf(e.rotation * DEG2RAD), 0.0f, cosf(e.rotation * DEG2RAD)};
             float dot = Vector3DotProduct(eFacing, Vector3Normalize(toPlayer));
-            if (distToPlayer <= ATTACK_RANGE + 1.8f && dot > 0.55f && e.attackCooldown <= 0.0f &&
-                e.stamina >= 26.0f && !e.isAttacking && !e.isDodging && !e.isBlocking && e.stunTimer <= 0.0f) {
+            
+            bool canAffordAttack = (activeAttackers < 2); // ONLY 2 SPIRITS ATTACK AT ONCE
+            
+            if (canAffordAttack && distToPlayer <= ATTACK_RANGE + 2.2f && dot > 0.65f && e.attackCooldown <= 0.0f &&
+                e.stamina >= 26.0f && !e.isAttacking && !e.isWindingUp && !e.isDodging && !e.isBlocking && e.stunTimer <= 0.0f) {
                 bool wantHeavy = (e.type == TANK && GetRandomValue(0, 100) < 40);
                 bool canHeavy = (e.stamina >= 48.0f);
                 e.isHeavyAttack = wantHeavy && canHeavy;
-                float staminaCost = e.isHeavyAttack ? 48.0f : 26.0f;
-                float durMult = e.isHeavyAttack ? 1.75f : 1.0f;
-                e.attackTimer = e.attackDur * durMult;
+                
+                e.isWindingUp = true;
+                float baseWindup = (e.type == AGILE) ? 0.32f : 0.52f;
+                e.windupTimer = baseWindup * (e.isHeavyAttack ? 1.6f : 1.0f);
+                
                 e.currentAttack = e.isHeavyAttack ? LIGHT_1 : static_cast<AttackType>(GetRandomValue(0, 2));
-                e.isAttacking = true;
+                
+                float staminaCost = e.isHeavyAttack ? 48.0f : 26.0f;
                 e.stamina -= staminaCost;
                 e.staminaRegenDelay = e.isHeavyAttack ? 1.4f : 0.8f;
                 float baseCd = (e.type == AGILE) ? 0.9f : ((e.type == TANK) ? 2.5f : 1.6f);
@@ -583,6 +618,10 @@ void DrawEnemy(const Enemy& e, int index) {
     Color body = e.bodyColor;
     
     if (!e.alive) body = {180, 200, 220, 255}; // Purified Silver-Blue
+    else if (e.isWindingUp) {
+        float pulse = 0.5f + 0.5f * sinf(GetTime() * 30.0f);
+        body = ColorAlphaBlend(e.bodyColor, WHITE, Fade(WHITE, pulse));
+    }
     else if (e.stunTimer > 0 || e.flinchTimer > 0) body = {255, 255, 255, 255};
     else if (e.isBlocking) body = {60, 70, 90, 255}; // Iron Guard
     else if (e.isDodging) body = moltenEmber;

@@ -52,9 +52,9 @@ int main() {
             if (gameState == PLAYING) {
                 UpdateGame(dt);
 
-                // Level transition (only for level 1 → level 2)
-                if (currentLevel == 1 && exitActive && Vector3Distance(player.position, exitPosition) < 9.0f) {
-                    currentLevel = 2;
+                // Level transition (Levels 1 and 2)
+                if ((currentLevel == 1 || currentLevel == 2) && exitActive && Vector3Distance(player.position, exitPosition) < 9.0f) {
+                    currentLevel++;
                     ResetLevel();
                 }
 
