@@ -45,14 +45,14 @@ void ApplyEnemyHitToPlayer(const Enemy& e) {
     Vector3 norm = Vector3Normalize(toPlayer);
 
     float dmgMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 2.1f : ((e.comboStep == 3) ? 1.6f : 1.3f))
-                                    : (e.isHeavyAttack ? 1.75f : 1.0f);
+                                    : (e.isHeavyAttack ? 1.75f : (1.0f + e.comboStep * 0.15f));
     if (e.type == BOSS && e.isPhase2) dmgMult *= 1.25f;
 
     float poiseMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 2.2f : ((e.comboStep == 3) ? 1.8f : 1.4f))
-                                      : (e.isHeavyAttack ? 1.85f : 1.0f);
+                                      : (e.isHeavyAttack ? 1.85f : (1.0f + e.comboStep * 0.2f));
     if (e.type == BOSS && e.isPhase2) poiseMult *= 1.3f;
     float knockMult = (e.type == BOSS) ? ((e.comboStep == 5) ? 1.8f : 1.3f)
-                                      : (e.isHeavyAttack ? 1.5f : 1.0f);
+                                      : (e.isHeavyAttack ? 1.5f : (1.0f + e.comboStep * 0.1f));
 
     float damage = e.attackDamage * dmgMult;
     float poiseDmg = e.poiseDamage * poiseMult;
@@ -260,17 +260,17 @@ void UpdateEnemies(float dt) {
         if (e.isWindingUp) {
             e.windupTimer -= dt;
             e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 8.0f * dt);
-            
-            // Physical windup pose (PULL BACK AND UP)
-            float baseWindup = (e.type == BOSS) ? ((e.isPhase2) ? 0.32f : 0.48f) : ((e.type == AGILE) ? 0.32f : 0.52f);
-            if (e.isHeavyAttack) baseWindup *= 1.6f;
-            
-            // Negative pitch is UP, Yaw > 150 is BACK
+            // Physical windup pose (PULL BACK AND UP) - DRASTICALLY FASTER
+            float baseWindup = (e.type == BOSS) ? ((e.isPhase2) ? 0.12f : 0.18f) : ((e.type == AGILE) ? 0.08f : 0.14f);
+            if (e.isHeavyAttack) baseWindup *= 1.3f;
+
+            // Fast snapping Lerp for windup
             float targetPitch = (e.type == BOSS) ? -135.0f : -95.0f;
             float targetYaw = (e.type == BOSS) ? 190.0f : 165.0f;
 
-            e.swingPitch = Lerp(e.swingPitch, targetPitch, 14.0f * dt);
-            e.swingYaw = Lerp(e.swingYaw, targetYaw, 14.0f * dt);
+            e.swingPitch = Lerp(e.swingPitch, targetPitch, 28.0f * dt);
+            e.swingYaw = Lerp(e.swingYaw, targetYaw, 28.0f * dt);
+
 
             // Visual feedback during windup (face player)
             Vector3 toP = Vector3Subtract(player.position, e.position);
@@ -286,6 +286,12 @@ void UpdateEnemies(float dt) {
                                             : e.attackDur * (e.isHeavyAttack ? 1.75f : 1.0f);
                 if (e.type == BOSS && e.isPhase2) dur *= 0.75f;
                 e.attackTimer = dur;
+
+                // Forward Lunge Impulse
+                Vector3 lungeDir = {sinf(e.rotation*DEG2RAD), 0, cosf(e.rotation*DEG2RAD)};
+                float lungePower = (e.type == BOSS) ? 35.0f : (e.type == AGILE ? 28.0f : 22.0f);
+                if (e.isHeavyAttack) lungePower *= 1.4f;
+                e.velocity = Vector3Add(e.velocity, Vector3Scale(lungeDir, lungePower));
             }
             continue; // Skip movement while winding up
         }
@@ -396,7 +402,7 @@ void UpdateEnemies(float dt) {
                 }
                 
                 e.isWindingUp = true;
-                e.windupTimer = (e.isPhase2) ? 0.32f : 0.48f;
+                e.windupTimer = (e.isPhase2) ? 0.12f : 0.18f;
                 
                 e.stamina -= 25.0f;
                 e.staminaRegenDelay = 1.0f;
@@ -444,22 +450,28 @@ void UpdateEnemies(float dt) {
                 }
                 e.rotation = atan2f(toPatrol.x, toPatrol.z) * RAD2DEG;
             } else {
+                // Hyper-Intelligence: Predictive Interception
+                Vector3 predictedPlayerPos = Vector3Add(player.position, Vector3Scale(player.velocity, 0.35f));
+                Vector3 toTarget = Vector3Subtract(predictedPlayerPos, e.position);
+                float distToTarget = Vector3Length(toTarget);
+
                 if (seesPlayer) {
                     e.rotation = atan2f(toPlayer.x, toPlayer.z) * RAD2DEG;
                 }
 
-                if (distToPlayer > idealDist + 2.0f) {
-                    moveDir = Vector3Normalize(toPlayer);
-                } else if (distToPlayer < idealDist - 2.0f) {
+                if (distToPlayer > idealDist + 2.5f) {
+                    moveDir = Vector3Normalize(toTarget);
+                } else if (distToPlayer < idealDist - 2.5f) {
                     moveDir = Vector3Scale(Vector3Normalize(toPlayer), -1.0f);
                 } else {
-                    // Circle player based on index to flank
+                    // Circle player aggressively
                     Vector3 forward = Vector3Normalize(toPlayer);
                     Vector3 tangent = {forward.z, 0.0f, -forward.x};
                     float circleDir = (i % 2 == 0) ? 1.0f : -1.0f;
                     moveDir = Vector3Scale(tangent, circleDir);
+                    moveSpeed *= 1.25f; // Fast flanking
                 }
-                moveSpeed *= 0.95f;
+                moveSpeed *= 1.15f; // Generally faster tracking
             }
 
             // Coordinated Attack decision
@@ -468,24 +480,29 @@ void UpdateEnemies(float dt) {
             
             bool canAffordAttack = (activeAttackers < 2); // ONLY 2 SPIRITS ATTACK AT ONCE
             
-            if (canAffordAttack && distToPlayer <= ATTACK_RANGE + 2.2f && dot > 0.65f && e.attackCooldown <= 0.0f &&
-                e.stamina >= 26.0f && !e.isAttacking && !e.isWindingUp && !e.isDodging && !e.isBlocking && e.stunTimer <= 0.0f) {
-                bool wantHeavy = (e.type == TANK && GetRandomValue(0, 100) < 40);
-                bool canHeavy = (e.stamina >= 48.0f);
-                e.isHeavyAttack = wantHeavy && canHeavy;
+            if (canAffordAttack && distToPlayer <= ATTACK_RANGE + 2.5f && dot > 0.65f && e.attackCooldown <= 0.0f &&
+                e.stamina >= 20.0f && !e.isAttacking && !e.isWindingUp && !e.isDodging && !e.isBlocking && e.stunTimer <= 0.0f) {
+                
+                // Determine combo length based on type
+                int comboTarget = (e.type == AGILE) ? 3 : 2;
+                e.comboStep = (e.comboStep % comboTarget) + 1;
+                
+                bool wantHeavy = (e.type == TANK && GetRandomValue(0, 100) < 45);
+                e.isHeavyAttack = wantHeavy && (e.stamina >= 40.0f);
                 
                 e.isWindingUp = true;
-                float baseWindup = (e.type == AGILE) ? 0.32f : 0.52f;
-                e.windupTimer = baseWindup * (e.isHeavyAttack ? 1.6f : 1.0f);
+                float baseWindup = (e.type == AGILE) ? 0.08f : 0.14f; // Faster windups
+                e.windupTimer = baseWindup * (e.isHeavyAttack ? 1.3f : 1.0f);
                 
-                e.currentAttack = e.isHeavyAttack ? LIGHT_1 : static_cast<AttackType>(GetRandomValue(0, 2));
+                e.currentAttack = static_cast<AttackType>(e.comboStep - 1);
                 
-                float staminaCost = e.isHeavyAttack ? 48.0f : 26.0f;
+                float staminaCost = e.isHeavyAttack ? 40.0f : 22.0f;
                 e.stamina -= staminaCost;
-                e.staminaRegenDelay = e.isHeavyAttack ? 1.4f : 0.8f;
-                float baseCd = (e.type == AGILE) ? 0.9f : ((e.type == TANK) ? 2.5f : 1.6f);
-                baseCd += e.isHeavyAttack ? 1.3f : 0.0f;
-                e.attackCooldown = baseCd + (float)GetRandomValue(0, 15) / 10.0f;
+                e.staminaRegenDelay = e.isHeavyAttack ? 1.2f : 0.6f;
+                
+                // Attack cooldown is shorter for combos
+                float baseCd = (e.comboStep < comboTarget) ? 0.15f : ((e.type == AGILE) ? 0.8f : 1.8f);
+                e.attackCooldown = baseCd + (float)GetRandomValue(0, 5) / 10.0f;
             }
         }
 
@@ -570,22 +587,26 @@ void UpdateEnemies(float dt) {
             
             float progress = 1.0f - (e.attackTimer / dur);
 
+            // Hyperrealistic Strike Acceleration (Ease-In)
+            float snapProg = powf(progress, 3.0f); 
+
             // Boss combo animations
             if (e.type == BOSS) {
                 switch(e.comboStep) {
-                    case 1: e.swingYaw = Lerp(190.0f, -80.0f, progress);
-                            e.swingPitch = Lerp(-135.0f, 90.0f, progress); break;
-                    case 2: e.swingYaw = Lerp(190.0f, 120.0f, progress);
-                            e.swingPitch = Lerp(-135.0f, 40.0f, progress); break;
-                    case 3: e.swingYaw = Lerp(190.0f, 180.0f, progress);
-                            e.swingPitch = Lerp(-135.0f, 0.0f, progress); break;
-                    case 4: e.swingYaw = Lerp(190.0f, -60.0f, progress);
-                            e.swingPitch = Lerp(-135.0f, 100.0f, progress); break;
+                    case 1: e.swingYaw = Lerp(190.0f, -80.0f, snapProg);
+                            e.swingPitch = Lerp(-135.0f, 90.0f, snapProg); break;
+                    case 2: e.swingYaw = Lerp(190.0f, 120.0f, snapProg);
+                            e.swingPitch = Lerp(-135.0f, 40.0f, snapProg); break;
+                    case 3: e.swingYaw = Lerp(190.0f, 180.0f, snapProg);
+                            e.swingPitch = Lerp(-135.0f, 0.0f, snapProg); break;
+                    case 4: e.swingYaw = Lerp(190.0f, -60.0f, snapProg);
+                            e.swingPitch = Lerp(-135.0f, 100.0f, snapProg); break;
                     case 5: {
                         float pp = progress * 3.0f;
                         if (pp < 1.0f) {
-                            e.swingYaw = Lerp(190.0f, -100.0f, pp);
-                            e.swingPitch = Lerp(-135.0f, 160.0f, pp);
+                            float spp = powf(pp, 3.0f);
+                            e.swingYaw = Lerp(190.0f, -100.0f, spp);
+                            e.swingPitch = Lerp(-135.0f, 160.0f, spp);
                         } else if (pp < 2.0f) {
                             e.swingYaw = Lerp(-100.0f, 200.0f, pp - 1.0f);
                             e.swingPitch = -110.0f;
@@ -597,14 +618,14 @@ void UpdateEnemies(float dt) {
                 }
             } else {
                 if (e.currentAttack == LIGHT_1) {
-                    e.swingPitch = Lerp(-95.0f, 90.0f, progress);
-                    e.swingYaw = Lerp(165.0f, -60.0f, progress);
+                    e.swingPitch = Lerp(-95.0f, 90.0f, snapProg);
+                    e.swingYaw = Lerp(165.0f, -60.0f, snapProg);
                 } else if (e.currentAttack == LIGHT_2) {
-                    e.swingPitch = Lerp(-95.0f, 20.0f, progress);
-                    e.swingYaw = Lerp(165.0f, 320.0f, progress);
+                    e.swingPitch = Lerp(-95.0f, 20.0f, snapProg);
+                    e.swingYaw = Lerp(165.0f, 320.0f, snapProg);
                 } else {
-                    e.swingPitch = Lerp(-95.0f, 110.0f, progress);
-                    e.swingYaw = Lerp(165.0f, 40.0f, progress);
+                    e.swingPitch = Lerp(-95.0f, 110.0f, snapProg);
+                    e.swingYaw = Lerp(165.0f, 40.0f, snapProg);
                 }
             }
 
