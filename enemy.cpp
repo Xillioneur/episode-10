@@ -13,7 +13,12 @@ bool CanSeePlayer(const Enemy& e) {
 
     Ray ray{eye, Vector3Normalize(dir)};
     for (const auto& obs : obstacles) {
-        BoundingBox box = {Vector3Subtract(obs, {5,7,5}), Vector3Add(obs, {5,7,5})};
+        if (obs.type == OBS_DEBRIS) continue;
+        
+        float h = obs.height;
+        float r = obs.radius;
+        BoundingBox box = {Vector3Subtract(obs.pos, {r, 0, r}), Vector3Add(obs.pos, {r, h, r})};
+        
         RayCollision col = GetRayCollisionBox(ray, box);
         if (col.hit && col.distance < dist - 0.8f) return false;
     }
@@ -113,7 +118,22 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
     Vector3 eFacing = {sinf(e.rotation*DEG2RAD), 0, cosf(e.rotation*DEG2RAD)};
     float backstabDot = Vector3DotProduct(eFacing, normToEnemy);
     bool backstab = backstabDot < -0.75f;
-    bool riposte = e.stunTimer > 0;
+    bool riposte = (e.stunTimer > 0 && dist < 10.0f);
+
+    if (riposte) {
+        baseDamage = 1000; 
+        basePoiseDmg = 500.0f;
+        // Divine Embrace visual burst
+        for(int i=0; i<40; i++) {
+            Particle p{};
+            p.position = Vector3Add(e.position, {0, 1.5f, 0});
+            p.velocity = { (float)GetRandomValue(-100,100)/10.0f, (float)GetRandomValue(-100,100)/10.0f, (float)GetRandomValue(-100,100)/10.0f };
+            p.lifetime = p.maxLife = 0.8f;
+            p.color = GOLD;
+            p.size = 0.6f;
+            particles.push_back(p);
+        }
+    }
 
     float dmgMult = (backstab || riposte) ? 2.6f : 1.0f;
     float poiseMult = (backstab || riposte) ? 2.3f : 1.0f;
@@ -527,7 +547,9 @@ void UpdateEnemies(float dt) {
 
         bool blocked = false;
         for (const auto& obs : obstacles) {
-            if (Vector3Distance({candidatePos.x, 0.0f, candidatePos.z}, obs) < entityRadius) {
+            if (obs.type == OBS_DEBRIS) continue;
+            float d = Vector2Distance({candidatePos.x, candidatePos.z}, {obs.pos.x, obs.pos.z});
+            if (d < (obs.radius + entityRadius * 0.45f)) { // Adjusted for spirit core size
                 blocked = true;
                 break;
             }
@@ -614,6 +636,20 @@ void UpdateEnemies(float dt) {
                         player.riposteTimer = 1.8f;
                         e.karma = std::min(100.0f, e.karma + 20.0f);
                         e.stunTimer = 2.8f;
+                        
+                        // Burst of Clarity Visual
+                        for(int i=0; i<20; i++) {
+                            float ang = (float)i/20.0f * 2.0f * PI;
+                            Particle p{};
+                            p.position = Vector3Add(e.position, {0, 1.5f, 0});
+                            p.velocity = { cosf(ang)*15.0f, 0, sinf(ang)*15.0f };
+                            p.lifetime = p.maxLife = 0.4f;
+                            p.color = WHITE;
+                            p.size = 0.8f;
+                            particles.push_back(p);
+                        }
+                        hitStopTimer = 0.12f;
+                        player.shakeTimer = 0.25f;
                         Vector3 knockDir = Vector3Normalize(Vector3Subtract(e.position, player.position));
                         e.velocity = Vector3Add(e.velocity, Vector3Scale(knockDir, 28.0f));
                         SpawnHitSparks(e.position, 24);

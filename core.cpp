@@ -7,7 +7,7 @@ GameState gameState = TITLE_SCREEN;
 int currentLevel = 1;
 Player player;
 std::vector<Enemy> enemies;
-std::vector<Vector3> obstacles;
+std::vector<Obstacle> obstacles;
 Vector3 exitPosition;
 bool exitActive = false;
 std::vector<Particle> particles;
@@ -107,47 +107,44 @@ void ResetLevel() {
     hitStopTimer = 0.0f;
     exitActive = false;
 
-    // Border walls
-    int border = 80;
-    int step = 12;
-    for (int i = -border; i <= border; i += step) {
-        obstacles.push_back({(float)i, 22.0f, (float)-border});
-        obstacles.push_back({(float)i, 22.0f, (float)border});
-        obstacles.push_back({(float)-border, 22.0f, (float)i});
-        obstacles.push_back({(float)border, 22.0f, (float)i});
+    // Border (Ancient Shard wall)
+    int border = 85;
+    for (int i = 0; i < 40; i++) {
+        float angle = (float)i / 40.0f * 2.0f * PI;
+        obstacles.push_back({OBS_SHARD, {cosf(angle)*border, 0, sinf(angle)*border}, (float)GetRandomValue(0, 360), 4.5f, (float)GetRandomValue(35, 65)});
     }
 
     if (currentLevel == 1) {
-        // Level 1: Garden of Serenity (Organic Clusters)
+        // Level 1: Garden of Serenity (Trees and Shards)
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float> dis(-border+25, border-25);
 
-        // Circular clusters to create "Islands"
-        for (int c = 0; c < 18; c++) {
-            float cx = dis(gen);
-            float cz = dis(gen);
-            if (Vector3Distance({cx, 0, cz}, {0, 0, 0}) < 22.0f) continue;
-
-            int clusterSize = GetRandomValue(4, 9);
-            float clusterRadius = (float)GetRandomValue(6, 14);
-            for (int i = 0; i < clusterSize; i++) {
-                float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
-                float dist = (float)GetRandomValue(0, (int)clusterRadius);
-                float h = (float)GetRandomValue(10, 32);
-                obstacles.push_back({cx + cosf(ang)*dist, h, cz + sinf(ang)*dist});
-            }
+        // Trees of Light
+        for (int i = 0; i < 12; i++) {
+            float tx = dis(gen);
+            float tz = dis(gen);
+            if (Vector3Distance({tx, 0, tz}, {0, 0, 0}) < 20.0f) continue;
+            obstacles.push_back({OBS_TREE, {tx, 0, tz}, (float)GetRandomValue(0, 360), 2.2f, (float)GetRandomValue(18, 32)});
         }
 
-        // Floating Debris (Atmosphere)
-        for (int i = 0; i < 50; i++) {
+        // Ancient Shards
+        for (int i = 0; i < 15; i++) {
+            float sx = dis(gen);
+            float sz = dis(gen);
+            if (Vector3Distance({sx, 0, sz}, {0, 0, 0}) < 20.0f) continue;
+            obstacles.push_back({OBS_SHARD, {sx, 0, sz}, (float)GetRandomValue(0, 360), 3.5f, (float)GetRandomValue(8, 22)});
+        }
+
+        // Floating Debris
+        for (int i = 0; i < 40; i++) {
             float dx = dis(gen);
             float dz = dis(gen);
             float dy = (float)GetRandomValue(18, 55);
-            obstacles.push_back({dx, 100.0f + dy, dz}); 
+            obstacles.push_back({OBS_DEBRIS, {dx, dy, dz}, 0, 0, 0}); 
         }
 
-        // Enemies (Reduced count for higher quality encounters)
+        // Enemies
         const int MAX_ENEMIES = 6;
         for (int i = 0; i < MAX_ENEMIES; i++) {
             Vector3 pos;
@@ -160,7 +157,7 @@ void ResetLevel() {
                 pos = { cosf(angle)*dist, 0, sinf(angle)*dist };
                 valid = Vector3Distance(pos, {0,0,0}) > 18.0f;
                 for (const auto& obs : obstacles) {
-                    if (obs.y < 100.0f && Vector3Distance(pos, {obs.x, 0, obs.z}) < 10.0f) {
+                    if (obs.type != OBS_DEBRIS && Vector3Distance(pos, {obs.pos.x, 0, obs.pos.z}) < (obs.radius + 6.0f)) {
                         valid = false;
                         break;
                     }
@@ -195,27 +192,25 @@ void ResetLevel() {
         exitPosition.y = 0;
     }
     else if (currentLevel == 2) {
-        // Level 2: Astral Courtyard (Spacious & Organic)
+        // Level 2: Astral Courtyard (Archways and Monoliths)
         player.position = {0, 0, -75.0f};
         
-        // Circular Layout with inner hubs
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float> dis(-border+30, border-30);
 
-        // Large Sacred Monoliths
-        for (int i = 0; i < 14; i++) {
-            float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
-            float dist = (float)GetRandomValue(25, 70);
-            float h = (float)GetRandomValue(20, 45);
-            obstacles.push_back({cosf(ang)*dist, h, sinf(ang)*dist});
+        // Sacred Archways (In a circle)
+        for (int i = 0; i < 8; i++) {
+            float ang = (float)i * 45.0f * DEG2RAD;
+            float r = 45.0f;
+            obstacles.push_back({OBS_ARCH, {cosf(ang)*r, 0, sinf(ang)*r}, (float)i * 45.0f, 6.0f, 22.0f});
         }
 
-        // Small Prayer Altars (lower cover)
-        for (int i = 0; i < 25; i++) {
+        // Marble Monoliths (Shards used as pillars)
+        for (int i = 0; i < 12; i++) {
             float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
-            float dist = (float)GetRandomValue(15, 65);
-            obstacles.push_back({cosf(ang)*dist, 10.0f, sinf(ang)*dist});
+            float r = (float)GetRandomValue(20, 75);
+            obstacles.push_back({OBS_SHARD, {cosf(ang)*r, 0, sinf(ang)*r}, (float)GetRandomValue(0, 360), 4.5f, (float)GetRandomValue(25, 55)});
         }
 
         // Floating Sanctuary Platforms
@@ -223,19 +218,26 @@ void ResetLevel() {
             float dx = dis(gen);
             float dz = dis(gen);
             float dy = (float)GetRandomValue(25, 60);
-            obstacles.push_back({dx, 100.0f + dy, dz}); 
+            obstacles.push_back({OBS_DEBRIS, {dx, dy, dz}, 0, 0, 0}); 
         }
 
-        // Tough Guard Souls (Reduced count, increased intelligence)
+        // Sacred Statues
+        for (int i = 0; i < 4; i++) {
+            float ang = (float)i * 90.0f * DEG2RAD + 22.5f*DEG2RAD;
+            float r = 60.0f;
+            obstacles.push_back({OBS_STATUE, {cosf(ang)*r, 0, sinf(ang)*r}, (float)i*90.0f, 3.5f, 22.0f});
+        }
+
+        // Tough Guard Souls
         for (int i = 0; i < 3; i++) {
-            float ang = (float)i / 7.0f * 2.0f * PI;
-            float r = 40.0f;
+            float ang = (float)i / 3.0f * 2.0f * PI + 45.0f*DEG2RAD;
+            float r = 35.0f;
             Enemy e{};
             e.type = TANK;
             e.position = {cosf(ang)*r, 0, sinf(ang)*r};
             e.homePosition = e.position;
             e.patrolTarget = e.position;
-            e.patrolRadius = 15.0f; // Much larger patrol area
+            e.patrolRadius = 15.0f; 
             e.alive = true;
             e.scale = 1.35f;
             e.health = 420; e.maxHealth = 420;
@@ -243,6 +245,7 @@ void ResetLevel() {
             e.speed = ENEMY_BASE_SPEED * 0.85f;
             e.bodyColor = {35, 35, 40, 255};
             e.attackDamage = 52.0f; e.poiseDamage = 65.0f; e.attackDur = 0.62f; e.dodgeChance = 0.2f;
+            e.trait = static_cast<SpiritTrait>(GetRandomValue(0, 4));
             enemies.push_back(e);
         }
 
@@ -252,19 +255,19 @@ void ResetLevel() {
         // Level 3: Inner Sanctum (Celestial Cathedral)
         player.position = {0, 0, -65.0f};
 
-        // Cathedral Nave (Large side pillars)
+        // Cathedral Nave (Side Monoliths)
         for (int z = -80; z <= 80; z += 20) {
             float h = (float)GetRandomValue(45, 65);
-            obstacles.push_back({-35.0f, h, (float)z});
-            obstacles.push_back({ 35.0f, h, (float)z});
+            obstacles.push_back({OBS_SHARD, {-35.0f, 0, (float)z}, 0, 6.0f, h});
+            obstacles.push_back({OBS_SHARD, { 35.0f, 0, (float)z}, 0, 6.0f, h});
         }
 
-        // Circular Apse (Back of arena)
-        int numPillars = 12;
+        // Circular Apse (Archways at the back)
+        int numArches = 6;
         float radius = 45.0f;
-        for (int i = 0; i < numPillars; i++) {
-            float ang = (float)i / numPillars * PI; // Semi-circle
-            obstacles.push_back({cosf(ang) * radius, 55.0f, 40.0f + sinf(ang) * 20.0f});
+        for (int i = 0; i < numArches; i++) {
+            float ang = (float)i / (numArches-1) * PI; // Semi-circle
+            obstacles.push_back({OBS_ARCH, {cosf(ang) * radius, 0, 40.0f + sinf(ang) * 20.0f}, (float)i*30.0f, 5.0f, 35.0f});
         }
 
         // Floating "Halo" Rubble
@@ -272,11 +275,19 @@ void ResetLevel() {
             float ang = (float)GetRandomValue(0, 359) * DEG2RAD;
             float r = (float)GetRandomValue(50, 90);
             float h = (float)GetRandomValue(30, 70);
-            obstacles.push_back({cosf(ang)*r, 100.0f + h, sinf(ang)*r});
+            obstacles.push_back({OBS_DEBRIS, {cosf(ang)*r, 100.0f + h, sinf(ang)*r}, 0, 0, 0});
         }
 
         // The Corrupted Arbiter (Final Form)
         Enemy boss{};
+        
+        // Sacred Altars (Detailed geometry)
+        Vector3 altarPositions[] = { {-15, 0, 20}, {15, 0, 20}, {-15, 0, 50}, {15, 0, 50} };
+        for(auto& ap : altarPositions) {
+            obstacles.push_back({OBS_ALTAR, ap, 0, 4.0f, 6.0f}); 
+            // Heart of Faith (Floating above)
+            obstacles.push_back({OBS_DEBRIS, {ap.x, 10.0f, ap.z}, 0, 0, 0}); 
+        }
         boss.type = BOSS;
         boss.position = {0, 0, 35.0f};
         boss.homePosition = boss.position;

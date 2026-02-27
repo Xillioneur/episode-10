@@ -244,7 +244,9 @@ void UpdatePlayer(float dt) {
 
     bool collision = false;
     for (const auto& obs : obstacles) {
-        if (Vector3Distance({candidate.x, 0.0f, candidate.z}, obs) < COLLISION_RADIUS_BASE) {
+        if (obs.type == OBS_DEBRIS) continue;
+        float d = Vector2Distance({candidate.x, candidate.z}, {obs.pos.x, obs.pos.z});
+        if (d < (obs.radius + 1.2f)) {
             collision = true;
             break;
         }
@@ -265,7 +267,11 @@ void UpdatePlayer(float dt) {
         Vector3 newPos = Vector3Add(player.position, Vector3Scale(player.velocity, dt));
         bool collision = false;
         for (const auto& obs : obstacles) {
-            if (Vector3Distance({newPos.x, player.position.y, newPos.z}, obs) < 6.8f) {
+            if (obs.type == OBS_DEBRIS) continue; // Floating debris is not solid
+            
+            float dist = Vector2Distance({newPos.x, newPos.z}, {obs.pos.x, obs.pos.z});
+            float combinedRadius = obs.radius + 1.2f; // Player radius approx 1.2f
+            if (dist < combinedRadius) {
                 collision = true;
                 break;
             }

@@ -205,6 +205,16 @@ struct Enemy {
     SpiritTrait trait = TRAIT_FAITHFUL;
 };
 
+enum ObstacleType { OBS_SHARD, OBS_ARCH, OBS_TREE, OBS_STATUE, OBS_ALTAR, OBS_DEBRIS };
+
+struct Obstacle {
+    ObstacleType type;
+    Vector3 pos;
+    float rotation;
+    float radius;
+    float height;
+};
+
 // ======================================================================
 // Globals (declared extern)
 // ======================================================================
@@ -212,7 +222,7 @@ extern GameState gameState;
 extern int currentLevel;
 extern Player player;
 extern std::vector<Enemy> enemies;
-extern std::vector<Vector3> obstacles;
+extern std::vector<Obstacle> obstacles;
 extern Vector3 exitPosition;
 extern bool exitActive;
 extern std::vector<Particle> particles;

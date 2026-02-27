@@ -7,19 +7,60 @@ void Draw3DScene() {
     DrawSphere({player.position.x, 0, player.position.z}, 180.0f, {35, 15, 65, 40});
 
     for (const auto& obs : obstacles) {
-        if (obs.y > 100.0f) {
-            // Floating Debris
-            float realY = obs.y - 100.0f;
-            float pulse = sinf(GetTime() * 0.5f + obs.x) * 2.0f;
-            DrawCube({obs.x, realY + pulse, obs.z}, 4.0f, 4.0f, 4.0f, {65, 70, 90, 255});
-            DrawCube({obs.x, realY + pulse, obs.z}, 4.2f, 4.2f, 4.2f, Fade(GOLD, 0.1f));
-        } else {
-            // Pillars/Ruins
-            float h = obs.y;
-            Vector3 pos = {obs.x, h/2.0f - 1.0f, obs.z};
-            DrawCube(pos, 8.0f, h, 8.0f, {45, 50, 65, 255}); 
-            DrawCube(Vector3Add(pos, {0, h/2.0f + 1.0f, 0}), 9.0f, 2.0f, 9.0f, {60, 65, 85, 255});
+        rlPushMatrix();
+        rlTranslatef(obs.pos.x, obs.pos.y, obs.pos.z);
+        rlRotatef(obs.rotation, 0, 1, 0);
+
+        switch (obs.type) {
+            case OBS_SHARD: {
+                // Jagged Monolith
+                float h = obs.height;
+                DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.6f, 6, {45, 50, 65, 255});
+                DrawCylinderEx({0, h, 0}, {0, h + 2.0f, 0}, obs.radius * 0.6f, 0.0f, 6, {60, 65, 85, 255});
+            } break;
+
+            case OBS_ARCH: {
+                // Sacred Archway
+                float h = obs.height;
+                float w = obs.radius * 2.0f;
+                // Pillars
+                DrawCube({-w/2, h/2, 0}, 2.0f, h, 2.0f, {240, 240, 245, 255});
+                DrawCube({ w/2, h/2, 0}, 2.0f, h, 2.0f, {240, 240, 245, 255});
+                // Arch Top
+                DrawCube({0, h, 0}, w + 4.0f, 2.5f, 3.0f, {245, 245, 250, 255});
+                DrawSphere({0, h + 2.5f, 0}, 2.0f, GOLD);
+            } break;
+
+            case OBS_TREE: {
+                // Tree of Light
+                float h = obs.height;
+                DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.4f, 8, {255, 255, 255, 255});
+                // Canopy (Particles simulated with spheres)
+                float pulse = 0.8f + 0.2f * sinf(GetTime() * 2.0f);
+                DrawSphere({0, h, 0}, obs.radius * 4.0f * pulse, Fade(GOLD, 0.15f));
+                DrawSphere({0, h + 2.0f, 0}, obs.radius * 2.5f, Fade(WHITE, 0.1f));
+            } break;
+
+            case OBS_STATUE: {
+                float h = obs.height;
+                DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.8f, 12, {240, 240, 245, 255});
+                DrawSphere({0, h + 1.5f, 0}, obs.radius * 1.2f, GOLD);
+                DrawCircle3D({0, h + 4.5f, 0}, obs.radius * 1.5f, {1,0,0}, 90, Fade(GOLD, 0.4f));
+            } break;
+
+            case OBS_ALTAR: {
+                DrawCube({0, 3.0f, 0}, 8.0f, 6.0f, 5.0f, {240, 240, 245, 255});
+                DrawCube({0, 6.2f, 0}, 9.0f, 0.5f, 6.0f, {255, 255, 255, 255});
+            } break;
+
+            case OBS_DEBRIS: {
+                float pulse = sinf(GetTime() * 0.5f + obs.pos.x) * 2.0f;
+                rlTranslatef(0, pulse, 0);
+                DrawCube({0,0,0}, 4.0f, 4.0f, 4.0f, {65, 70, 90, 255});
+                DrawCube({0,0,0}, 4.2f, 4.2f, 4.2f, Fade(GOLD, 0.1f));
+            } break;
         }
+        rlPopMatrix();
     }
 
     // Exit portal for Levels 1 and 2
@@ -63,9 +104,15 @@ void Draw3DScene() {
     for (size_t i = 1; i < weaponTrail.size(); i++) {
         float alpha = 1.0f - (weaponTrail[i].time / 0.5f);
         if (alpha <= 0) continue;
-        Color c = player.powerReady ? Fade(WHITE, alpha) : Fade(player.weapon.bladeColor, alpha*0.8f);
-        DrawLine3D(weaponTrail[i-1].pos, weaponTrail[i].pos, c);
-        DrawLine3D(Vector3Add(weaponTrail[i-1].pos, {0,0.2f,0}), Vector3Add(weaponTrail[i].pos, {0,0.2f,0}), c);
+        Color c = player.powerReady ? Fade(WHITE, alpha) : Fade(player.weapon.bladeColor, alpha * 0.6f);
+        
+        // Draw multiple lines to create a ribbon/sheet effect
+        for (float h = -0.4f; h <= 0.4f; h += 0.1f) {
+            Vector3 offset = {0, h, 0};
+            DrawLine3D(Vector3Add(weaponTrail[i-1].pos, offset), Vector3Add(weaponTrail[i].pos, offset), c);
+        }
+        // Glow core
+        DrawLine3D(weaponTrail[i-1].pos, weaponTrail[i].pos, Fade(WHITE, alpha * 0.4f));
     }
 }
 
