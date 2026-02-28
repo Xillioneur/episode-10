@@ -351,7 +351,7 @@ void UpdatePlayer(float dt) {
             player.isAttacking = true;
             player.attackTimer = POWER_ATTACK_DURATION * (fatigued ? 1.4f : 1.0f);
             player.currentAttack = HEAVY;
-            player.stamina -= STAMINA_POWER_COST;
+            player.stamina -= STAMINA_ATTACK_COST * 2.0f; // More consistent cost
             player.staminaRegenDelay = REGEN_DELAY_AFTER_ACTION * 2.0f;
             player.comboStep = 0;
             player.comboTimer = COMBO_RESET_TIME;
@@ -369,6 +369,13 @@ void UpdatePlayer(float dt) {
             player.attackTimer = NORMAL_ATTACK_DURATION * (fatigued ? 1.3f : 1.0f);
             player.currentAttack = static_cast<AttackType>(player.comboStep - 1);
         }
+        
+        if (player.isAttacking) {
+            // Forward Lunge Impulse
+            Vector3 lungeDir = {sinf(player.rotation*DEG2RAD), 0, cosf(player.rotation*DEG2RAD)};
+            float power = (player.currentAttack == HEAVY) ? 48.0f : 35.0f;
+            player.velocity = Vector3Add(player.velocity, Vector3Scale(lungeDir, power));
+        }
         player.powerReady = false;
     }
 
@@ -379,31 +386,34 @@ void UpdatePlayer(float dt) {
         float durationBase = (player.currentAttack == HEAVY) ? POWER_ATTACK_DURATION : NORMAL_ATTACK_DURATION;
         float duration = durationBase * (fatigued ? 1.35f : 1.0f);
         float progress = 1.0f - (player.attackTimer / duration);
+        
+        // Hyperrealistic Strike Acceleration (Ease-In) - ELITE PLAYER SNAP
+        float snapProg = powf(progress, 7.0f);
 
-        // Swing animation
+        // Swing animation - CLEAN ARCS IN FRONT
         if (player.currentAttack == HEAVY) {
             float pp = progress * 3.0f;
             if (pp < 1.0f) {
-                player.swingPitch = Lerp(160.0f, -110.0f, pp);
-                player.swingYaw = Lerp(100.0f, -100.0f, pp);
+                float spp = powf(pp, 7.0f);
+                player.swingYaw = 0.0f;
+                player.swingPitch = Lerp(-110.0f, 140.0f, spp);
             } else if (pp < 2.0f) {
-                player.swingPitch = -110.0f;
-                player.swingYaw = Lerp(-100.0f, 200.0f, pp-1.0f);
+                player.swingYaw = 0.0f;
+                player.swingPitch = 140.0f;
             } else {
-                player.swingPitch = Lerp(-110.0f, 140.0f, pp-2.0f);
-                player.swingYaw = Lerp(200.0f, 0.0f, pp-2.0f);
+                player.swingYaw = 0.0f;
+                player.swingPitch = Lerp(140.0f, 30.0f, pp - 2.0f);
             }
-        }
-        else {
+        } else {
             if (player.comboStep == 1) {
-                player.swingPitch = Lerp(110.0f, -95.0f, progress);
-                player.swingYaw = Lerp(80.0f, -80.0f, progress);
+                player.swingPitch = Lerp(-85.0f, 90.0f, snapProg);
+                player.swingYaw = 0.0f;
             } else if (player.comboStep == 2) {
-                player.swingPitch = Lerp(30.0f, -30.0f, progress);
-                player.swingYaw = Lerp(-170.0f, 170.0f, progress);
+                player.swingPitch = 0.0f;
+                player.swingYaw = Lerp(110.0f, -110.0f, snapProg);
             } else {
-                player.swingPitch = Lerp(-90.0f, 125.0f, progress);
-                player.swingYaw = Lerp(-70.0f, 90.0f, progress);
+                player.swingPitch = Lerp(-45.0f, 45.0f, snapProg);
+                player.swingYaw = Lerp(-90.0f, 90.0f, snapProg);
             }
         }
 

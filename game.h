@@ -31,10 +31,10 @@ const float STAMINA_SPRINT_COST = 16.0f;
 const float STAMINA_ATTACK_COST = 20.0f;
 const float STAMINA_POWER_COST = 45.0f;
 const float STAMINA_PARRY_COST = 24.0f;
-const float NORMAL_ATTACK_DURATION = 0.42f;
+const float NORMAL_ATTACK_DURATION = 0.18f; // Near-instant strikes
 
 const float POWER_ATTACK_CHARGE = 0.85f;
-const float POWER_ATTACK_DURATION = 1.05f;
+const float POWER_ATTACK_DURATION = 0.35f; // Faster heavy blessing
 const float COMBO_RESET_TIME = 1.1f;
 const float CAMERA_DISTANCE = 19.0f;
 const float CAMERA_HEIGHT = 15.2f;
