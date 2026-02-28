@@ -211,6 +211,25 @@ struct Enemy {
     SpiritTrait trait = TRAIT_FAITHFUL;
 };
 
+// Procedural Audio
+struct AudioSynth {
+    AudioStream stream;
+    float phase[8];
+    float frequency;
+    float amplitude;
+    float decay;
+    float filter[4][2];
+    float lfo;
+    
+    // Reverb/Echo State
+    float delayBuffer[4410]; // 100ms delay line
+    int delayPtr;
+    
+    // SFX Triggers
+    float sfxTimer;
+    int sfxType; // 0: None, 1: Swing, 2: Hit, 3: Ascension, 4: Footstep
+};
+
 enum ObstacleType { OBS_SHARD, OBS_ARCH, OBS_TREE, OBS_STATUE, OBS_ALTAR, OBS_DEBRIS };
 
 struct Obstacle {
@@ -242,11 +261,16 @@ extern Vector3 camPos;
 extern float hitStopTimer;
 extern std::vector<std::string> deathMessages;
 extern const char* currentDeathMessage;
+extern AudioSynth synth;
 
 // ======================================================================
 // Function Prototypes
 // ======================================================================
 void InitGame();
+void InitAudioSynth();
+void UpdateAudioSynth();
+void TriggerSFX(int type);
+void ProcessAudioStream(void *buffer, unsigned int frames);
 void ResetLevel();
 void UpdateGame(float dt);
 void UpdatePlayer(float dt);

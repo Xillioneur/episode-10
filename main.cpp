@@ -10,6 +10,7 @@ int main() {
     DisableCursor();
 
     InitAudioDevice();
+    InitAudioSynth();
     InitGame();
     ResetLevel();
 
@@ -17,8 +18,9 @@ int main() {
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
+        UpdateAudioSynth(); // Our custom update hook
 
-        // Cursor management - More robust locking
+        // Cursor management
         if (gameState != lastGameState) {
             if (gameState == PLAYING) {
                 DisableCursor(); // Locks and hides cursor

@@ -51,6 +51,7 @@ void ApplyEnemyHitToPlayer(const Enemy& e) {
     float poiseDmg = e.poiseDamage * poiseMult;
 
     player.health -= damage;
+    TriggerSFX(2); // Player hit sound
     const_cast<Enemy&>(e).karma = std::max(0.0f, e.karma - 15.0f);
     player.hitInvuln = 0.5f;
     player.velocity = Vector3Add(player.velocity, Vector3Scale(norm, 55.0f * knockMult)); // HYPER-IMPACT KNOCKBACK
@@ -146,6 +147,7 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
     float poiseDamage = basePoiseDmg * poiseMult * player.weapon.poiseDamageMultiplier;
 
     e.health -= damage;
+    TriggerSFX(2); // Spirit hit sound
     e.karma = std::min(100.0f, e.karma + 10.0f); // Blessing increases Karma
     e.hitInvuln = 0.4f;
     float finalKnock = riposte ? 85.0f : (65.0f * knockMult);
@@ -202,6 +204,7 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
 
     if (e.health <= 0) {
         e.alive = false;
+        TriggerSFX(3); // Ascension sound
         SpawnAscensionParticles(e.position);
         
         // Drop Relic
@@ -280,6 +283,7 @@ void UpdateEnemies(float dt) {
             if (e.windupTimer <= 0.0f) {
                 e.isWindingUp = false;
                 e.isAttacking = true;
+                TriggerSFX(1); // Enemy swing sound
                 
                 float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.45f : 0.28f)
                                             : e.attackDur * (e.isHeavyAttack ? 1.3f : 1.0f);

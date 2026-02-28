@@ -14,11 +14,139 @@ std::vector<Particle> particles;
 std::vector<RelicOrb> relicOrbs;
 std::vector<TrailPoint> weaponTrail;
 std::vector<Notification> notifications;
+AudioSynth synth = { 0 };
 Camera3D camera = { 0 };
 Shader bloomShader = { 0 };
 RenderTexture2D target = { 0 };
 Vector3 camPos = {0, CAMERA_HEIGHT, CAMERA_DISTANCE};
 float hitStopTimer = 0.0f;
+
+// ======================================================================
+// Audio Synthesis - Hyperrealistic Physical Modeling Engine
+// ======================================================================
+void TriggerSFX(int type) {
+    synth.sfxType = type;
+    synth.sfxTimer = 0.0f;
+    synth.amplitude = 1.0f;
+    for(int i=0; i<8; i++) synth.phase[i] = (float)GetRandomValue(0, 1000) / 1000.0f; 
+    
+    if (type == 1) { // Swing (FM Edge + Air Zip)
+        synth.frequency = 4200.0f;
+        synth.decay = 14.0f;
+    } else if (type == 2) { // Hit (Karplus-Strong Metallic Impact)
+        synth.frequency = 180.0f;
+        synth.decay = 8.5f;
+    } else if (type == 3) { // Ascension (Shimmering Shepard Tone)
+        synth.frequency = 330.0f;
+        synth.decay = 0.6f;
+    } else if (type == 4) { // Footstep (Filtered Impact)
+        synth.frequency = 2800.0f;
+        synth.decay = 22.0f;
+        synth.amplitude = 0.25f;
+    }
+}
+
+// Simple Resonant Multi-mode Filter
+inline float ApplyFilter(int id, float input, float cutoff, float resonance) {
+    float f = cutoff * 1.16f;
+    float fb = resonance * (1.0f - 0.15f * f * f);
+    input -= synth.filter[id][0] * fb;
+    input *= 0.35013f * (f*f)*(f*f);
+    float out = input + 0.3f * synth.filter[id][0] + (1.0f - f) * synth.filter[id][1];
+    synth.filter[id][1] = synth.filter[id][0];
+    synth.filter[id][0] = input;
+    return out;
+}
+
+void ProcessAudioStream(void *buffer, unsigned int frames) {
+    short *d = (short *)buffer;
+    float sampleRate = 44100.0f;
+    float dt = 1.0f / sampleRate;
+
+    for (unsigned int i = 0; i < frames; i++) {
+        float sample = 0.0f;
+        synth.lfo = sinf(GetTime() * 0.4f);
+
+        // 1. CATHEDRAL AMBIANCE (FM Drone + Void Wind)
+        static float ambPhases[4] = {0};
+        float ambFreqs[4] = {55.0f, 110.0f, 164.8f, 220.0f}; 
+        for(int j=0; j<4; j++) {
+            float mod = sinf(ambPhases[(j+1)%4] * 0.5f) * 2.0f;
+            ambPhases[j] += (ambFreqs[j] + mod) * dt;
+            sample += sinf(ambPhases[j] * 2.0f * PI) * 0.012f;
+        }
+        
+        float whiteNoise = (float)GetRandomValue(-100, 100) / 100.0f;
+        synth.filter[0][0] = Lerp(synth.filter[0][0], whiteNoise, 0.004f + 0.002f * synth.lfo);
+        sample += synth.filter[0][0] * 0.03f;
+
+        // 2. SFX SYNTHESIS
+        if (synth.amplitude > 0.0001f) {
+            synth.sfxTimer += dt;
+            float envelope = powf(synth.amplitude, 2.0f); 
+            synth.amplitude -= synth.decay * dt;
+            if (synth.amplitude < 0) synth.amplitude = 0;
+
+            if (synth.sfxType == 1) { // Blade Zip (FM Shriek + HPF Noise)
+                float currentFreq = Lerp(synth.frequency, 800.0f, powf(1.0f - synth.amplitude, 0.4f));
+                float mod = sinf(synth.phase[1] * 2.0f * PI) * 1500.0f;
+                float edge = sinf(synth.phase[0] * 2.0f * PI + mod) * 0.5f;
+                synth.phase[0] += currentFreq * dt;
+                synth.phase[1] += (currentFreq * 1.414f) * dt; 
+                static float lastN = 0;
+                float hpNoise = whiteNoise - lastN;
+                lastN = whiteNoise;
+                sample += (edge + hpNoise * 0.6f) * envelope * 1.5f;
+            } 
+            else if (synth.sfxType == 2) { // Metallic Impact
+                float ring = 0.0f;
+                float freqs[] = {1.0f, 1.45f, 1.91f, 2.22f};
+                for(int j=0; j<4; j++) {
+                    ring += sinf(synth.phase[j] * 2.0f * PI) * (0.4f / (j+1));
+                    synth.phase[j] += (synth.frequency * freqs[j]) * dt;
+                }
+                float thump = sinf(synth.sfxTimer * 80.0f * 2.0f * PI) * 0.6f * expf(-synth.sfxTimer * 25.0f);
+                sample += (ring * 0.5f + thump) * envelope * 1.2f;
+            }
+            else if (synth.sfxType == 3) { // Shimmering Shepard Tone
+                for (int h = 1; h <= 8; h++) {
+                    float f = synth.frequency * powf(2.0f, (float)h/2.0f);
+                    float detune = 1.0f + sinf(GetTime() * 12.0f + h) * 0.005f;
+                    sample += sinf(synth.phase[h-1] * 2.0f * PI) * (0.25f / h) * synth.amplitude;
+                    synth.phase[h-1] += (f * detune) * dt;
+                }
+                synth.frequency += 200.0f * dt;
+            }
+            else if (synth.sfxType == 4) { // Resonant Footstep
+                sample += ApplyFilter(3, whiteNoise, 0.05f, 0.3f) * envelope * 0.8f;
+            }
+        }
+
+        // 3. CATHEDRAL REVERB
+        synth.delayBuffer[synth.delayPtr] = sample + synth.delayBuffer[synth.delayPtr] * 0.45f;
+        sample += synth.delayBuffer[synth.delayPtr] * 0.35f;
+        synth.delayPtr = (synth.delayPtr + 1) % 4410;
+
+        sample = Clamp(sample, -1.0f, 1.0f);
+        d[i*2] = (short)(sample * 26000.0f);
+        d[i*2+1] = (short)(sample * 26000.0f);
+    }
+}
+
+void InitAudioSynth() {
+    SetAudioStreamBufferSizeDefault(4096);
+    synth.stream = LoadAudioStream(44100, 16, 2);
+    SetAudioStreamCallback(synth.stream, ProcessAudioStream);
+    PlayAudioStream(synth.stream);
+}
+
+void UpdateAudioSynth() {
+    // Check if stream is playing, if not restart it (looping ambiance)
+    if (!IsAudioStreamPlaying(synth.stream)) {
+        PlayAudioStream(synth.stream);
+    }
+}
+
 std::vector<std::string> deathMessages = {
     "Returning to Light", "Spirit Recalibrating", "Divine Connection Renewing", "Faith Tested",
     "Resting in Grace", "Ascension Delayed", "Trial of Patience", "Purification Ongoing",

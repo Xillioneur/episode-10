@@ -231,6 +231,19 @@ void UpdatePlayer(float dt) {
         }
     }
 
+    // Footstep Audio
+    static float stepTimer = 0.0f;
+    if (hasMoveInput && !player.isRolling && player.position.y <= 0.01f) {
+        float stepInterval = sprinting ? 0.25f : 0.38f;
+        stepTimer -= dt;
+        if (stepTimer <= 0.0f) {
+            stepTimer = stepInterval;
+            TriggerSFX(4);
+        }
+    } else {
+        stepTimer = 0.0f; // Reset for next step
+    }
+
     // Set velocity (snap to target during roll, allow momentum during attack/stagger)
     if (player.isRolling) {
         player.velocity = targetVelocity;
@@ -375,6 +388,7 @@ void UpdatePlayer(float dt) {
         }
         
         if (player.isAttacking) {
+            TriggerSFX(1);
             // Forward Lunge Impulse - SIGNIFICANTLY INCREASED
             Vector3 lungeDir = {sinf(player.rotation*DEG2RAD), 0, cosf(player.rotation*DEG2RAD)};
             float power = (player.currentAttack == HEAVY) ? 72.0f : 55.0f;
