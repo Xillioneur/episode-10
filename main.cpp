@@ -13,20 +13,24 @@ int main() {
     InitGame();
     ResetLevel();
 
+    GameState lastGameState = (gameState == TITLE_SCREEN) ? PAUSED : TITLE_SCREEN; // Force first-frame update
+
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
 
-        // Cursor management
-        if (gameState == PLAYING) {
-            if (!IsCursorHidden()) {
-                DisableCursor();
-                HideCursor();
+        // Cursor management - More robust locking
+        if (gameState != lastGameState) {
+            if (gameState == PLAYING) {
+                DisableCursor(); // Locks and hides cursor
+            } else {
+                EnableCursor();  // Unlocks and shows cursor
             }
-        } else {
-            if (IsCursorHidden()) {
-                EnableCursor();
-                ShowCursor();
-            }
+            lastGameState = gameState;
+        }
+
+        // If user clicks back into window during play, re-disable
+        if (gameState == PLAYING && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && IsCursorOnScreen()) {
+            DisableCursor();
         }
 
         // 1. INPUT & GLOBAL TOGGLES

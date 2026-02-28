@@ -39,9 +39,21 @@ void Draw3DScene() {
             } break;
             case OBS_STATUE: {
                 float h = obs.height;
+                float dist = Vector3Distance(player.position, obs.pos);
+                float proximityPulse = 0.0f;
+                if (dist < 10.0f) proximityPulse = 0.4f + 0.4f * sinf(GetTime() * 5.0f);
+
                 DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.8f, 12, {240, 240, 245, 255});
                 DrawSphere({0, h + 1.5f, 0}, obs.radius * 1.2f, GOLD);
-                DrawCircle3D({0, h + 4.5f, 0}, obs.radius * 1.5f, {1,0,0}, 90, Fade(GOLD, 0.4f));
+                
+                // Pulsing Halo
+                float haloAlpha = 0.4f + proximityPulse;
+                DrawCircle3D({0, h + 4.5f, 0}, obs.radius * 1.5f, {1,0,0}, 90, Fade(GOLD, haloAlpha));
+                
+                // Sanctuary Aura (Floor pulse)
+                if (proximityPulse > 0) {
+                    DrawCircle3D({0, 0.1f, 0}, 8.0f, {1,0,0}, 90, Fade(GOLD, proximityPulse * 0.3f));
+                }
             } break;
             case OBS_ALTAR: {
                 DrawCube({0, 3.0f, 0}, 8.0f, 6.0f, 5.0f, {240, 240, 245, 255});
@@ -350,8 +362,9 @@ void DrawInstructionsScreen() {
     DrawText("Shift (tap)   - Merciful Step", leftX, y, listFont, textCol); y += lineHeight;
     DrawText("E             - Holy Essence", leftX, y, listFont, textCol); y += lineHeight;
     DrawText("Left Ctrl     - Sacred Redirection", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Middle Click  - Seek Clarity", leftX, y, listFont, textCol); y += lineHeight;
-    DrawText("Mouse flick   - Switch Focus", leftX, y, listFont, textCol); y += lineHeight + 30;
+    DrawText("TAB           - Book of Life (Stats)", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("F             - Commune with Sanctuary", leftX, y, listFont, textCol); y += lineHeight;
+    DrawText("Middle Click  - Seek Clarity (Lock)", leftX, y, listFont, textCol); y += lineHeight;
 
     DrawText("Divine Wisdom", SCREEN_WIDTH/2 - MeasureText("Divine Wisdom", 50)/2, y, 50, SKYBLUE); y += 60;
 
