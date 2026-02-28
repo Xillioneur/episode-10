@@ -1,11 +1,16 @@
 #include "game.h"
 
 void Draw3DScene() {
+    // Determine fog intensity based on remaining spirits
+    int aliveCount = 0;
+    for (const auto& e : enemies) if (e.alive) aliveCount++;
+    float totalEnemies = std::max(1.0f, (float)enemies.size());
+    float fogDensity = 0.15f + (aliveCount / totalEnemies) * 0.65f;
+    Color fogCol = {35, 15, 65, (unsigned char)(160 * fogDensity)}; // Confusion Purple (softer alpha)
+
     DrawPlane({0,-1.0f,0}, {600,600}, {15, 10, 25, 255}); // Dark Void
 
-    // Celestial Nebula (Deep Purple atmosphere)
-    DrawSphere({player.position.x, 0, player.position.z}, 180.0f, {35, 15, 65, 40});
-
+    // 1. DRAW OPAQUE OBJECTS FIRST
     for (const auto& obs : obstacles) {
         rlPushMatrix();
         rlTranslatef(obs.pos.x, obs.pos.y, obs.pos.z);
@@ -13,46 +18,35 @@ void Draw3DScene() {
 
         switch (obs.type) {
             case OBS_SHARD: {
-                // Jagged Monolith
                 float h = obs.height;
                 DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.6f, 6, {45, 50, 65, 255});
                 DrawCylinderEx({0, h, 0}, {0, h + 2.0f, 0}, obs.radius * 0.6f, 0.0f, 6, {60, 65, 85, 255});
             } break;
-
             case OBS_ARCH: {
-                // Sacred Archway
                 float h = obs.height;
                 float w = obs.radius * 2.0f;
-                // Pillars
                 DrawCube({-w/2, h/2, 0}, 2.0f, h, 2.0f, {240, 240, 245, 255});
                 DrawCube({ w/2, h/2, 0}, 2.0f, h, 2.0f, {240, 240, 245, 255});
-                // Arch Top
                 DrawCube({0, h, 0}, w + 4.0f, 2.5f, 3.0f, {245, 245, 250, 255});
                 DrawSphere({0, h + 2.5f, 0}, 2.0f, GOLD);
             } break;
-
             case OBS_TREE: {
-                // Tree of Light
                 float h = obs.height;
                 DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.4f, 8, {255, 255, 255, 255});
-                // Canopy (Particles simulated with spheres)
                 float pulse = 0.8f + 0.2f * sinf(GetTime() * 2.0f);
                 DrawSphere({0, h, 0}, obs.radius * 4.0f * pulse, Fade(GOLD, 0.15f));
                 DrawSphere({0, h + 2.0f, 0}, obs.radius * 2.5f, Fade(WHITE, 0.1f));
             } break;
-
             case OBS_STATUE: {
                 float h = obs.height;
                 DrawCylinderEx({0, 0, 0}, {0, h, 0}, obs.radius, obs.radius * 0.8f, 12, {240, 240, 245, 255});
                 DrawSphere({0, h + 1.5f, 0}, obs.radius * 1.2f, GOLD);
                 DrawCircle3D({0, h + 4.5f, 0}, obs.radius * 1.5f, {1,0,0}, 90, Fade(GOLD, 0.4f));
             } break;
-
             case OBS_ALTAR: {
                 DrawCube({0, 3.0f, 0}, 8.0f, 6.0f, 5.0f, {240, 240, 245, 255});
                 DrawCube({0, 6.2f, 0}, 9.0f, 0.5f, 6.0f, {255, 255, 255, 255});
             } break;
-
             case OBS_DEBRIS: {
                 float pulse = sinf(GetTime() * 0.5f + obs.pos.x) * 2.0f;
                 rlTranslatef(0, pulse, 0);
@@ -63,7 +57,6 @@ void Draw3DScene() {
         rlPopMatrix();
     }
 
-    // Exit portal for Levels 1 and 2
     if (currentLevel == 1 || currentLevel == 2) {
         Color exitCol = exitActive ? GOLD : DARKGRAY;
         DrawCube(Vector3Add(exitPosition, {0,6.0f,0}), 10.0f, 12.0f, 4.0f, Fade(exitCol, 0.6f));
@@ -74,6 +67,31 @@ void Draw3DScene() {
     for (size_t i = 0; i < enemies.size(); i++) {
         DrawEnemy(enemies[i], (int)i);
     }
+
+    // 2. DRAW TRANSPARENT ATMOSPHERE ELEMENTS LAST
+    
+    // Divine Light Shafts (Slender & Distant)
+    for (int i = 0; i < 6; i++) {
+        float ang = (float)i * 60.0f * DEG2RAD + GetTime() * 0.03f;
+        float dist = 70.0f + 10.0f * sinf(GetTime() * 0.15f + i);
+        Vector3 lightPos = {cosf(ang) * dist, 0, sinf(ang) * dist};
+        
+        float lightAlpha = 0.20f * (1.0f - fogDensity);
+        if (lightAlpha < 0.04f) lightAlpha = 0.04f;
+
+        // Much thinner shafts
+        DrawCylinderEx(Vector3Add(lightPos, {0, 200, 0}), lightPos, 6.0f, 4.0f, 8, Fade(GOLD, lightAlpha));
+        DrawCylinderEx(Vector3Add(lightPos, {0, 200, 0}), lightPos, 2.0f, 1.0f, 8, Fade(WHITE, lightAlpha * 0.4f));
+    }
+
+    // Volumetric Fog Layers (Closer to player, varying heights)
+    rlDisableBackfaceCulling();
+    for (int i = 0; i < 5; i++) {
+        float r = 60.0f + i * 25.0f;
+        float pulse = sinf(GetTime() * 0.4f + i) * 10.0f;
+        DrawSphere({player.position.x, 5.0f + pulse, player.position.z}, r, Fade(fogCol, 0.12f));
+    }
+    rlEnableBackfaceCulling();
 
     // Relic Orbs
     for (const auto& orb : relicOrbs) {
@@ -117,6 +135,16 @@ void Draw3DScene() {
 }
 
 void DrawHUD() {
+    // 0. Screen-space Fog of Confusion Overlay (Guaranteed visibility)
+    int aliveCount = 0;
+    for (const auto& e : enemies) if (e.alive) aliveCount++;
+    float totalEnemies = std::max(1.0f, (float)enemies.size());
+    float fogDensity = (aliveCount / totalEnemies);
+    if (fogDensity > 0.01f) {
+        Color screenFog = {35, 15, 65, (unsigned char)(80 * fogDensity)}; // Subtle tint
+        DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, screenFog);
+    }
+
     // Resolve (Spiritual Purity)
     float hpRatio = (float)player.health / player.maxHealth;
     Color hpColor = (hpRatio > 0.5f) ? SKYBLUE : (hpRatio > 0.25f) ? YELLOW : ORANGE;
@@ -139,12 +167,15 @@ void DrawHUD() {
     // Holy Essence
     DrawText(TextFormat("Holy Essence: %d", player.flasks), 40, 190, 30, SKYBLUE);
 
-    // Inventory Prompt
+    // Inventory & Sanctuary Prompts
     if (gameState == PLAYING) {
-        DrawText("TAB - Sacred Inventory", SCREEN_WIDTH - 320, 30, 24, LIGHTGRAY);
+        DrawText("TAB - Book of Life", SCREEN_WIDTH - 280, 30, 24, LIGHTGRAY);
+        if (player.nearStatue) {
+            DrawText("Press F to Commune with Sanctuary", SCREEN_WIDTH/2 - 220, SCREEN_HEIGHT/2 + 100, 24, GOLD);
+        }
         for (const auto& orb : relicOrbs) {
             if (orb.active && Vector3Distance(player.position, orb.pos) < 6.0f) {
-                DrawText("Walk over Relic to Collect", SCREEN_WIDTH/2 - 160, SCREEN_HEIGHT/2 + 100, 24, WHITE);
+                DrawText("Walk over Relic to Collect", SCREEN_WIDTH/2 - 160, SCREEN_HEIGHT/2 + 140, 24, WHITE);
                 break;
             }
         }
@@ -224,6 +255,50 @@ void DrawInventory() {
     DrawText("Effect: Strengthens your Spiritual Resolve.", uiX + 380, itemY + 15, 20, {80, 70, 60, 255});
     
     DrawText("Press TAB to Close the Book", SCREEN_WIDTH/2 - MeasureText("Press TAB to Close the Book", 24)/2, uiY + 450, 24, inkCol);
+}
+
+void DrawSanctuary() {
+    DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(WHITE, 0.3f));
+    
+    int uiX = SCREEN_WIDTH/2 - 450;
+    int uiY = 100;
+    
+    // Radiant Sanctuary Background
+    DrawRectangle(uiX - 20, uiY - 20, 940, 550, {250, 250, 255, 255}); // Marble White
+    DrawRectangleLinesEx({(float)uiX - 20, (float)uiY - 20, 940, 550}, 8, GOLD);
+    
+    DrawText("SPIRIT ATTUNEMENT", SCREEN_WIDTH/2 - MeasureText("SPIRIT ATTUNEMENT", 50)/2, uiY + 10, 50, GOLD);
+    DrawText("Rest and grow in the Light of the Sanctuary", SCREEN_WIDTH/2 - MeasureText("Rest and grow in the Light of the Sanctuary", 24)/2, uiY + 70, 24, DARKGRAY);
+    
+    int itemY = uiY + 140;
+    Color inkCol = {40, 40, 50, 255};
+
+    // Mercy Path
+    DrawText("[1] Path of Mercy", uiX + 60, itemY, 32, (player.mercyRelics >= 3 ? GOLD : GRAY));
+    DrawText(TextFormat("Level: %d", player.mercyLevel), uiX + 60, itemY + 35, 20, inkCol);
+    DrawText("Upgrade Holy Essence capacity and potency.", uiX + 320, itemY + 5, 20, DARKGRAY);
+    DrawText("Cost: 3 Relics of Mercy", uiX + 320, itemY + 30, 18, (player.mercyRelics >= 3 ? LIME : RED));
+    itemY += 110;
+
+    // Discipline Path
+    DrawText("[2] Path of Discipline", uiX + 60, itemY, 32, (player.disciplineRelics >= 3 ? SKYBLUE : GRAY));
+    DrawText(TextFormat("Level: %d", player.disciplineLevel), uiX + 60, itemY + 35, 20, inkCol);
+    DrawText("Increase Clarity impact and reduce costs.", uiX + 320, itemY + 5, 20, DARKGRAY);
+    DrawText("Cost: 3 Relics of Discipline", uiX + 320, itemY + 30, 18, (player.disciplineRelics >= 3 ? LIME : RED));
+    itemY += 110;
+
+    // Fortitude Path
+    DrawText("[3] Path of Fortitude", uiX + 60, itemY, 32, (player.fortitudeRelics >= 3 ? WHITE : GRAY));
+    DrawText(TextFormat("Level: %d", player.fortitudeLevel), uiX + 60, itemY + 35, 20, inkCol);
+    DrawText("Permanently bolsters your Spiritual Resolve.", uiX + 320, itemY + 5, 20, DARKGRAY);
+    DrawText("Cost: 3 Relics of Fortitude", uiX + 320, itemY + 30, 18, (player.fortitudeRelics >= 3 ? LIME : RED));
+    
+    // Inventory reminder
+    DrawText(TextFormat("Your Relics: Mercy (%d) | Discipline (%d) | Fortitude (%d)", 
+             player.mercyRelics, player.disciplineRelics, player.fortitudeRelics), 
+             SCREEN_WIDTH/2 - 350, uiY + 460, 24, inkCol);
+
+    DrawText("Press F or ESC to Leave the Light", SCREEN_WIDTH/2 - MeasureText("Press F or ESC to Leave the Light", 24)/2, uiY + 500, 24, GOLD);
 }
 
 void DrawTitleScreen() {

@@ -1,30 +1,34 @@
 # Game Design Document: Divine Sentinel - Path of Grace
 
 ## 1. Vision & Overview
-**Divine Sentinel** is a third-person journey of restoration. You are the Emissary of Grace, tasked with purifying lost spirits. As you restore the Nexus, you collect **Sacred Relics**—echoes of the spirits' true natures—which you can manage in your inventory to strengthen your connection to the Divine.
+**Divine Sentinel** is a third-person journey of restoration. You are the Emissary of Grace, tasked with purifying lost spirits. The core loop involves rhythmic restoration, relic collection, and spiritual growth at Sacred Sanctuaries.
 
 *   **Core Pillars:**
-    - **Fluid Restoration:** Purify spirits through rhythmic grace.
-    - **Sacred Collection:** Automatically harvest Relics from purified souls.
-    - **The Book of Life (Inventory):** Manage and equip relics to customize your playstyle.
+    - **Fluid Restoration:** Purify spirits through rhythmic grace and momentum.
+    - **Sacred Collection:** Harvest Relics of Virtue from soothed souls.
+    - **Spiritual Attunement:** Use collected relics at Sanctuaries to permanently enhance your divine powers.
 
 ## 2. World & Narrative
-- **The Goal:** Restore the Celestial Nexus by collecting the lost virtues of its inhabitants.
-- **Relics of Virtue:**
-    - **Relic of Mercy:** Dropped by Compassionate spirits. Boosts healing.
-    - **Relic of Discipline:** Dropped by Cruel/Wrathful spirits. Boosts Poise damage.
-    - **Relic of Fortitude:** Dropped by Greedy/Faithful spirits. Boosts Spiritual Resolve.
+- **The Goal:** Restore the Celestial Nexus by balancing the virtues of its inhabitants.
+- **Sanctuary Statues:** Ancient landmarks that serve as beacons of light where the Emissary can rest and grow stronger.
 
 ## 3. Gameplay Mechanics
-### 3.1 The Rite of Purification
-- **Soothe:** Bring a spirit's health to zero to trigger an automatic **Ascension**.
-- **Harvest:** Upon ascension, a spirit leaves behind a floating **Relic Orb**. Walking over it adds it to your Sacred Inventory.
+### 3.1 The Gameplay Loop
+1.  **Restoration:** Soothe agitated spirits using blessings and redirections.
+2.  **Collection:** Gather Relic Orbs left behind by ascending souls.
+3.  **Attunement:** Visit a Sanctuary Statue to "spend" relics on permanent upgrades.
+4.  **Ascension:** Clear the area of confusion to open the gate to the next realm.
 
-### 3.2 The Sacred Inventory
-- **Tab Key:** Opens the inventory menu.
-- **Dynamic Progression:** Each collected relic provides a stacking passive bonus to the Emissary.
-- **Customization:** View your collection and the total virtues restored to the Nexus.
+### 3.2 Sanctuary Interaction
+- **Rest:** Fully restores Spiritual Resolve and Holy Essence.
+- **Attune Spirit:** A menu where you spend Relics to upgrade:
+    - **Path of Mercy:** Increase Healing Flask capacity or speed.
+    - **Path of Discipline:** Increase Poise damage or reduce Blessing stamina cost.
+    - **Path of Fortitude:** Increase Maximum Resolve or Dodge I-frames.
+
+### 3.3 Environmental Synergy
+- **Radiant Empowerment:** Standing within a **Divine Light Shaft** increases your **Divine Spirit (Stamina)** regeneration by 50%.
 
 ## 4. Visuals & Feedback
-- **Relic Orbs:** Glowing spheres of light (Gold, Blue, or White) that hover where a spirit was purified.
-- **Inventory Menu:** A clean, celestial parchment-style overlay showing icons and stats for your collected virtues.
+- **Sanctuary Glow:** Functional statues pulse with a soft gold aura when the player is near.
+- **Attunement Menu:** A radiant, full-screen interface for selecting spiritual paths.

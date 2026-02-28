@@ -319,6 +319,45 @@ void UpdateGame(float dt) {
         else ++it;
     }
 
+    // 1. Radiant Empowerment (Stamina regen boost in light)
+    bool isEmpowered = false;
+    for (int i = 0; i < 6; i++) {
+        float ang = (float)i * 60.0f * DEG2RAD + GetTime() * 0.03f;
+        float dist = 70.0f + 10.0f * sinf(GetTime() * 0.15f + i);
+        Vector3 lightPos = {cosf(ang) * dist, 0, sinf(ang) * dist};
+        if (Vector2Distance({player.position.x, player.position.z}, {lightPos.x, lightPos.z}) < 15.0f) {
+            isEmpowered = true;
+            break;
+        }
+    }
+    // Note: STAMINA_REGEN_RATE is constant, so we apply the multiplier in player.cpp
+    // For now, we'll just track the empowerment state
+    static bool wasEmpowered = false;
+    if (isEmpowered && !wasEmpowered) {
+        Notification n{"DIVINE RADIANCE", player.position, 1.5f, GOLD};
+        notifications.push_back(n);
+    }
+    wasEmpowered = isEmpowered;
+
+    // 2. Sanctuary Proximity & Interaction
+    player.nearStatue = false;
+    for (const auto& obs : obstacles) {
+        if (obs.type == OBS_STATUE) {
+            if (Vector3Distance(player.position, obs.pos) < 10.0f) {
+                player.nearStatue = true;
+                if (IsKeyPressed(KEY_F)) {
+                    gameState = SANCTUARY;
+                    // Rest Effect
+                    player.health = player.maxHealth;
+                    player.flasks = MAX_FLASKS + player.mercyLevel;
+                    Notification n{"SANCTUARY REACHED", player.position, 2.0f, SKYBLUE};
+                    notifications.push_back(n);
+                }
+                break;
+            }
+        }
+    }
+
     UpdateCamera(dt);
 
     if (gameState != PLAYING) return;
@@ -334,9 +373,9 @@ void UpdateGame(float dt) {
     UpdateEnemies(effectiveDt);
     UpdateParticles(effectiveDt);
 
-    // Apply Passive Buffs from Relics
-    player.maxHealth = MAX_PLAYER_HEALTH + (player.fortitudeRelics * 20);
-    player.weapon.poiseDamageMultiplier = 1.0f + (player.disciplineRelics * 0.08f);
+    // Apply Passive Buffs from Relics and Upgrades
+    player.maxHealth = MAX_PLAYER_HEALTH + (player.fortitudeRelics * 20) + (player.fortitudeLevel * 25);
+    player.weapon.poiseDamageMultiplier = 1.0f + (player.disciplineRelics * 0.08f) + (player.disciplineLevel * 0.10f);
 
     // Update Relic Orbs (Collection)
     for (auto& orb : relicOrbs) {

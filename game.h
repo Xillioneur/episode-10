@@ -18,7 +18,7 @@ const int SCREEN_HEIGHT = 810;
 const float BASE_PLAYER_SPEED = 7.4f;
 const float SPRINT_MULTIPLIER = 1.85f;
 const float EXHAUSTED_MULTIPLIER = 0.45f;
-const float ATTACK_RANGE = 6.2f;
+const float ATTACK_RANGE = 8.5f; // Increased reach
 const float ROLL_DURATION = 0.22f;
 const float ROLL_DISTANCE = 13.0f;
 const float ROLL_COST = 18.0f;
@@ -52,7 +52,7 @@ const float COLLISION_RADIUS_BASE = 6.8f;
 // ======================================================================
 // Enums
 // ======================================================================
-enum GameState { TITLE_SCREEN, INSTRUCTIONS, PLAYING, INVENTORY, PAUSED, DEAD, VICTORY };
+enum GameState { TITLE_SCREEN, INSTRUCTIONS, PLAYING, INVENTORY, SANCTUARY, PAUSED, DEAD, VICTORY };
 
 enum SpiritTrait { TRAIT_COMPASSIONATE, TRAIT_CRUEL, TRAIT_GREEDY, TRAIT_FAITHFUL, TRAIT_WRATHFUL };
 enum RelicType { RELIC_MERCY, RELIC_DISCIPLINE, RELIC_FORTITUDE };
@@ -139,6 +139,12 @@ struct Player {
     int disciplineRelics = 0;
     int fortitudeRelics = 0;
     float lastInventoryKeyTime = 0.0f;
+
+    // Upgrades
+    int mercyLevel = 0;
+    int disciplineLevel = 0;
+    int fortitudeLevel = 0;
+    bool nearStatue = false;
 };
 
 struct Notification {
@@ -252,6 +258,7 @@ void DrawPlayer();
 void DrawEnemy(const Enemy& e, int index);
 void DrawHUD();
 void DrawInventory();
+void DrawSanctuary();
 void DrawTitleScreen();
 void DrawInstructionsScreen();
 void DrawDeathScreen();
@@ -265,5 +272,16 @@ bool CanSeePlayer(const Enemy& e);
 bool IsEnemyAttackSwingHittingPlayer(const Enemy& e);
 void ApplyEnemyHitToPlayer(const Enemy& e);
 bool CheckPlayerAttackHitEnemy(Enemy& e);
+
+inline Vector3 GetClosestPointOnSegment(Vector3 p, Vector3 a, Vector3 b) {
+    Vector3 ab = Vector3Subtract(b, a);
+    Vector3 ap = Vector3Subtract(p, a);
+    float dot = Vector3DotProduct(ap, ab);
+    float lenSq = Vector3DotProduct(ab, ab);
+    float t = (lenSq != 0) ? dot / lenSq : 0;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    return Vector3Add(a, Vector3Scale(ab, t));
+}
 
 #endif

@@ -33,6 +33,7 @@ int main() {
         if (IsKeyPressed(KEY_ESCAPE)) {
             if (gameState == PLAYING) gameState = PAUSED;
             else if (gameState == INVENTORY) gameState = PLAYING;
+            else if (gameState == SANCTUARY) gameState = PLAYING;
             else if (gameState == PAUSED) gameState = PLAYING;
             else if (gameState == VICTORY) break; // Quit from Victory
         }
@@ -69,10 +70,33 @@ int main() {
                 }
                 break;
             case INVENTORY:
-                UpdateGame(dt); // Keeps camera and world alive behind menu
+                UpdateGame(dt); // Keeps camera alive
+                break;
+            case SANCTUARY:
+                UpdateGame(dt); // Keeps light shafts moving
+                if (IsKeyPressed(KEY_F)) gameState = PLAYING;
+                
+                // Upgrade Logic
+                if (IsKeyPressed(KEY_ONE) && player.mercyRelics >= 3) {
+                    player.mercyRelics -= 3;
+                    player.mercyLevel++;
+                    Notification n{"PATH OF MERCY ATTUNED", player.position, 2.0f, GOLD};
+                    notifications.push_back(n);
+                }
+                if (IsKeyPressed(KEY_TWO) && player.disciplineRelics >= 3) {
+                    player.disciplineRelics -= 3;
+                    player.disciplineLevel++;
+                    Notification n{"PATH OF DISCIPLINE ATTUNED", player.position, 2.0f, SKYBLUE};
+                    notifications.push_back(n);
+                }
+                if (IsKeyPressed(KEY_THREE) && player.fortitudeRelics >= 3) {
+                    player.fortitudeRelics -= 3;
+                    player.fortitudeLevel++;
+                    Notification n{"PATH OF FORTITUDE ATTUNED", player.position, 2.0f, WHITE};
+                    notifications.push_back(n);
+                }
                 break;
             case PAUSED:
-                // Game paused
                 break;
             case DEAD:
                 UpdatePlayer(dt);
@@ -94,7 +118,6 @@ int main() {
         ClearBackground(BLACK);
 
         if (gameState != TITLE_SCREEN && gameState != INSTRUCTIONS) {
-            // Render 3D Scene to texture for post-processing
             BeginTextureMode(target);
             ClearBackground({12, 12, 22, 255});
             BeginMode3D(camera);
@@ -102,7 +125,6 @@ int main() {
             EndMode3D();
             EndTextureMode();
 
-            // Draw post-processed scene
             if (bloomShader.id > 0) BeginShaderMode(bloomShader);
             DrawTextureRec(target.texture, {0, 0, (float)target.texture.width, (float)-target.texture.height}, {0, 0}, WHITE);
             if (bloomShader.id > 0) EndShaderMode();
@@ -110,6 +132,7 @@ int main() {
             DrawHUD();
             
             if (gameState == INVENTORY) DrawInventory();
+            if (gameState == SANCTUARY) DrawSanctuary();
             if (gameState == PAUSED) {
                 DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.65f));
                 DrawText("PAUSED", SCREEN_WIDTH/2 - MeasureText("PAUSED", 80)/2, SCREEN_HEIGHT/2 - 60, 80, GOLD);

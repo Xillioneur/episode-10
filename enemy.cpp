@@ -26,17 +26,10 @@ bool CanSeePlayer(const Enemy& e) {
 }
 
 bool IsEnemyAttackSwingHittingPlayer(const Enemy& e) {
-    Vector3 toPlayer = Vector3Subtract(player.position, e.position);
-    toPlayer.y = 0.0f;
-    float dist = Vector3Length(toPlayer);
-    float maxDist = (e.type == BOSS && e.comboStep == 3) ? ATTACK_RANGE + 3.0f : ATTACK_RANGE + 1.2f;
-    if (dist > maxDist) return false;
-
-    Vector3 norm = Vector3Normalize(toPlayer);
-    Vector3 eFacing = {sinf(e.rotation*DEG2RAD),0,cosf(e.rotation*DEG2RAD)};
-    float minDot = (e.type == BOSS && e.comboStep == 3) ? 0.3f : 0.6f;
-    if (Vector3DotProduct(eFacing, norm) > minDot) return true;
-    return false;
+    Vector3 pCenter = Vector3Add(player.position, {0, 1.5f, 0});
+    Vector3 closest = GetClosestPointOnSegment(pCenter, e.bladeStart, e.bladeEnd);
+    float dist = Vector3Distance(pCenter, closest);
+    return (dist < 2.8f); // Player hit radius - INCREASED
 }
 
 void ApplyEnemyHitToPlayer(const Enemy& e) {
@@ -86,17 +79,18 @@ void ApplyEnemyHitToPlayer(const Enemy& e) {
 bool CheckPlayerAttackHitEnemy(Enemy& e) {
     if (!e.alive || e.hitInvuln > 0) return false;
 
+    Vector3 enemyCenter = Vector3Add(e.position, {0, 1.5f * e.scale, 0});
+    Vector3 closest = GetClosestPointOnSegment(enemyCenter, player.bladeStart, player.bladeEnd);
+    float dist = Vector3Distance(enemyCenter, closest);
+    
+    // Increased detection radius for larger enemies/bosses
+    float hitRadius = (e.type == BOSS) ? 4.5f : 2.2f * e.scale;
+    if (dist > hitRadius) return false;
+
     Vector3 toEnemy = Vector3Subtract(e.position, player.position);
     toEnemy.y = 0;
-    float dist = Vector3Length(toEnemy);
-    if (dist > ATTACK_RANGE + 1.4f) return false;
-
     Vector3 normToEnemy = Vector3Normalize(toEnemy);
-    Vector3 pFacing = {sinf(player.rotation*DEG2RAD), 0, cosf(player.rotation*DEG2RAD)};
-    float dot = Vector3DotProduct(pFacing, normToEnemy);
-    float minDot = (player.comboStep == 2) ? -0.45f : 0.35f;
-    if (dot < minDot) return false;
-
+    
     bool isHeavy = (player.currentAttack == HEAVY);
     int baseDamage = isHeavy ? 92 : 62;
     float basePoiseDmg = isHeavy ? 68.0f : 28.0f;
@@ -248,35 +242,39 @@ void UpdateEnemies(float dt) {
         float distToPlayer = Vector3Length(toPlayer);
         bool seesPlayer = (distToPlayer < 65.0f && CanSeePlayer(e));
 
-        // Tactical distance goals
-        float idealDist = (e.type == TANK) ? 8.5f : (e.type == AGILE ? 13.0f : 10.5f);
-        if (activeAttackers >= 2 && !e.isAttacking && !e.isWindingUp) {
-            idealDist += 10.0f; // Back off if others are busy
+        // Tactical distance goals - Lowered for aggression
+        float idealDist = (e.type == TANK) ? 6.5f : (e.type == AGILE ? 9.5f : 8.0f);
+        if (activeAttackers >= 3 && !e.isAttacking && !e.isWindingUp) {
+            idealDist += 6.0f; // Less of a penalty
         }
-        if (player.isCharging && distToPlayer < 15.0f) {
-            idealDist += 12.0f; // Fear the Sermon of Light
-        }
+        // Removed Fear logic
 
         if (e.isWindingUp) {
             e.windupTimer -= dt;
             e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 8.0f * dt);
-            // Physical windup pose (PULL BACK AND UP) - DRASTICALLY FASTER
-            float baseWindup = (e.type == BOSS) ? ((e.isPhase2) ? 0.12f : 0.18f) : ((e.type == AGILE) ? 0.08f : 0.14f);
-            if (e.isHeavyAttack) baseWindup *= 1.3f;
 
-            // Fast snapping Lerp for windup
-            float targetPitch = (e.type == BOSS) ? -135.0f : -95.0f;
-            float targetYaw = (e.type == BOSS) ? 190.0f : 165.0f;
+            // Physical windup pose (Targeted based on attack type)
+            float targetPitch = 0.0f;
+            float targetYaw = 0.0f;
 
-            e.swingPitch = Lerp(e.swingPitch, targetPitch, 28.0f * dt);
-            e.swingYaw = Lerp(e.swingYaw, targetYaw, 28.0f * dt);
+            if (e.type == BOSS) {
+                targetPitch = -110.0f; // Boss always pulls high
+                targetYaw = 120.0f;
+            } else {
+                if (e.currentAttack == LIGHT_1) { targetPitch = -85.0f; targetYaw = 0.0f; } // Overhead
+                else if (e.currentAttack == LIGHT_2) { targetPitch = 0.0f; targetYaw = 110.0f; } // Side
+                else { targetPitch = -45.0f; targetYaw = -90.0f; } // Diagonal
+            }
 
+            e.swingPitch = Lerp(e.swingPitch, targetPitch, 22.0f * dt);
+            e.swingYaw = Lerp(e.swingYaw, targetYaw, 22.0f * dt);
 
             // Visual feedback during windup (face player)
             Vector3 toP = Vector3Subtract(player.position, e.position);
             if (Vector3Length(toP) > 0.1f) {
                 e.rotation = atan2f(toP.x, toP.z) * RAD2DEG;
             }
+
 
             if (e.windupTimer <= 0.0f) {
                 e.isWindingUp = false;
@@ -287,10 +285,10 @@ void UpdateEnemies(float dt) {
                 if (e.type == BOSS && e.isPhase2) dur *= 0.75f;
                 e.attackTimer = dur;
 
-                // Forward Lunge Impulse
+                // Forward Lunge Impulse - INCREASED
                 Vector3 lungeDir = {sinf(e.rotation*DEG2RAD), 0, cosf(e.rotation*DEG2RAD)};
-                float lungePower = (e.type == BOSS) ? 35.0f : (e.type == AGILE ? 28.0f : 22.0f);
-                if (e.isHeavyAttack) lungePower *= 1.4f;
+                float lungePower = (e.type == BOSS) ? 42.0f : (e.type == AGILE ? 32.0f : 26.0f);
+                if (e.isHeavyAttack) lungePower *= 1.5f;
                 e.velocity = Vector3Add(e.velocity, Vector3Scale(lungeDir, lungePower));
             }
             continue; // Skip movement while winding up
@@ -450,37 +448,39 @@ void UpdateEnemies(float dt) {
                 }
                 e.rotation = atan2f(toPatrol.x, toPatrol.z) * RAD2DEG;
             } else {
-                // Hyper-Intelligence: Predictive Interception
-                Vector3 predictedPlayerPos = Vector3Add(player.position, Vector3Scale(player.velocity, 0.35f));
+                // Hyper-Intelligence: Relentless Predictive Interception
+                Vector3 predictedPlayerPos = Vector3Add(player.position, Vector3Scale(player.velocity, 0.42f));
                 Vector3 toTarget = Vector3Subtract(predictedPlayerPos, e.position);
-                float distToTarget = Vector3Length(toTarget);
+                
+                bool canAffordAttack = (activeAttackers < 3); // Relentless: 3 spirits attack at once
+                float targetDist = canAffordAttack ? 4.0f : idealDist; // Charge in if token available
 
                 if (seesPlayer) {
                     e.rotation = atan2f(toPlayer.x, toPlayer.z) * RAD2DEG;
                 }
 
-                if (distToPlayer > idealDist + 2.5f) {
+                if (distToPlayer > targetDist + 1.5f) {
                     moveDir = Vector3Normalize(toTarget);
-                } else if (distToPlayer < idealDist - 2.5f) {
+                } else if (distToPlayer < targetDist - 1.5f) {
                     moveDir = Vector3Scale(Vector3Normalize(toPlayer), -1.0f);
                 } else {
-                    // Circle player aggressively
+                    // Circle and flank aggressively
                     Vector3 forward = Vector3Normalize(toPlayer);
                     Vector3 tangent = {forward.z, 0.0f, -forward.x};
                     float circleDir = (i % 2 == 0) ? 1.0f : -1.0f;
                     moveDir = Vector3Scale(tangent, circleDir);
-                    moveSpeed *= 1.25f; // Fast flanking
+                    moveSpeed *= 1.45f; // Fast flanking
                 }
-                moveSpeed *= 1.15f; // Generally faster tracking
+                moveSpeed *= 1.25f; // High chase aggression
             }
 
             // Coordinated Attack decision
             Vector3 eFacing = {sinf(e.rotation * DEG2RAD), 0.0f, cosf(e.rotation * DEG2RAD)};
             float dot = Vector3DotProduct(eFacing, Vector3Normalize(toPlayer));
             
-            bool canAffordAttack = (activeAttackers < 2); // ONLY 2 SPIRITS ATTACK AT ONCE
+            bool canAffordAttack = (activeAttackers < 3); 
             
-            if (canAffordAttack && distToPlayer <= ATTACK_RANGE + 2.5f && dot > 0.65f && e.attackCooldown <= 0.0f &&
+            if (canAffordAttack && distToPlayer <= ATTACK_RANGE + 4.5f && dot > 0.55f && e.attackCooldown <= 0.0f &&
                 e.stamina >= 20.0f && !e.isAttacking && !e.isWindingUp && !e.isDodging && !e.isBlocking && e.stunTimer <= 0.0f) {
                 
                 // Determine combo length based on type
@@ -579,6 +579,24 @@ void UpdateEnemies(float dt) {
             e.velocity = Vector3Scale(e.velocity, 0.05f);
         }
 
+        // Update Blade BEFORE collision checks - FIXED ROTATION MATH
+        float bladeLen = (e.type == BOSS) ? 12.5f : 8.2f;
+        float er = e.rotation * DEG2RAD;
+        Vector3 epivot = Vector3Add(e.position, Vector3RotateByAxisAngle({0.65f,1.65f,0.4f}, {0,1,0}, er));
+        Vector3 ebaseLocal = {0,-0.7f,0.6f};
+        Vector3 etipLocal = {0,-0.7f, bladeLen};
+        
+        float totalYaw = (e.rotation + e.swingYaw) * DEG2RAD;
+        float pitchRad = e.swingPitch * DEG2RAD;
+
+        Vector3 ebase = Vector3RotateByAxisAngle(ebaseLocal, {1,0,0}, pitchRad);
+        ebase = Vector3RotateByAxisAngle(ebase, {0,1,0}, totalYaw);
+        Vector3 etip = Vector3RotateByAxisAngle(etipLocal, {1,0,0}, pitchRad);
+        etip = Vector3RotateByAxisAngle(etip, {0,1,0}, totalYaw);
+        
+        e.bladeStart = Vector3Add(epivot, ebase);
+        e.bladeEnd = Vector3Add(epivot, etip);
+
         // Attack execution
         if (e.isAttacking) {
             float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.85f : 0.55f)
@@ -590,48 +608,48 @@ void UpdateEnemies(float dt) {
             // Hyperrealistic Strike Acceleration (Ease-In)
             float snapProg = powf(progress, 3.0f); 
 
-            // Boss combo animations
+            // Boss combo animations - CLEAN ARCS
             if (e.type == BOSS) {
                 switch(e.comboStep) {
-                    case 1: e.swingYaw = Lerp(190.0f, -80.0f, snapProg);
-                            e.swingPitch = Lerp(-135.0f, 90.0f, snapProg); break;
-                    case 2: e.swingYaw = Lerp(190.0f, 120.0f, snapProg);
-                            e.swingPitch = Lerp(-135.0f, 40.0f, snapProg); break;
-                    case 3: e.swingYaw = Lerp(190.0f, 180.0f, snapProg);
-                            e.swingPitch = Lerp(-135.0f, 0.0f, snapProg); break;
-                    case 4: e.swingYaw = Lerp(190.0f, -60.0f, snapProg);
-                            e.swingPitch = Lerp(-135.0f, 100.0f, snapProg); break;
+                    case 1: e.swingYaw = 0.0f; 
+                            e.swingPitch = Lerp(-110.0f, 90.0f, snapProg); break; // Overhead
+                    case 2: e.swingYaw = Lerp(120.0f, -120.0f, snapProg); 
+                            e.swingPitch = 0.0f; break; // Wide Side
+                    case 3: e.swingYaw = Lerp(-120.0f, 120.0f, snapProg); 
+                            e.swingPitch = 30.0f; break; // Low Side
+                    case 4: e.swingYaw = 0.0f; 
+                            e.swingPitch = Lerp(-110.0f, 90.0f, snapProg); break; // Overhead
                     case 5: {
                         float pp = progress * 3.0f;
                         if (pp < 1.0f) {
                             float spp = powf(pp, 3.0f);
-                            e.swingYaw = Lerp(190.0f, -100.0f, spp);
-                            e.swingPitch = Lerp(-135.0f, 160.0f, spp);
+                            e.swingYaw = Lerp(120.0f, 0.0f, spp);
+                            e.swingPitch = Lerp(-110.0f, 140.0f, spp);
                         } else if (pp < 2.0f) {
-                            e.swingYaw = Lerp(-100.0f, 200.0f, pp - 1.0f);
-                            e.swingPitch = -110.0f;
+                            e.swingYaw = 0.0f;
+                            e.swingPitch = 140.0f;
                         } else {
-                            e.swingYaw = Lerp(200.0f, 0.0f, pp - 2.0f);
-                            e.swingPitch = Lerp(-110.0f, 140.0f, pp - 2.0f);
+                            e.swingYaw = 0.0f;
+                            e.swingPitch = Lerp(140.0f, 30.0f, pp - 2.0f);
                         }
                     } break;
                 }
             } else {
                 if (e.currentAttack == LIGHT_1) {
-                    e.swingPitch = Lerp(-95.0f, 90.0f, snapProg);
-                    e.swingYaw = Lerp(165.0f, -60.0f, snapProg);
+                    e.swingPitch = Lerp(-85.0f, 90.0f, snapProg);
+                    e.swingYaw = 0.0f;
                 } else if (e.currentAttack == LIGHT_2) {
-                    e.swingPitch = Lerp(-95.0f, 20.0f, snapProg);
-                    e.swingYaw = Lerp(165.0f, 320.0f, snapProg);
+                    e.swingPitch = 0.0f;
+                    e.swingYaw = Lerp(110.0f, -110.0f, snapProg);
                 } else {
-                    e.swingPitch = Lerp(-95.0f, 110.0f, snapProg);
-                    e.swingYaw = Lerp(165.0f, 40.0f, snapProg);
+                    e.swingPitch = Lerp(-45.0f, 45.0f, snapProg);
+                    e.swingYaw = Lerp(-90.0f, 90.0f, snapProg);
                 }
             }
 
-            // Hit window
-            float hitStart = (e.type == BOSS && (e.comboStep == 3 || e.comboStep == 5)) ? 0.25f : 0.20f;
-            float hitEnd = (e.type == BOSS && e.comboStep == 3) ? 0.85f : 0.80f;
+            // Hit window (Adjusted for Snap Acceleration)
+            float hitStart = (e.type == BOSS && (e.comboStep == 3 || e.comboStep == 5)) ? 0.40f : 0.45f;
+            float hitEnd = 0.95f;
 
             // VOID SLAM Logic (Phase 2, Step 5)
             if (e.type == BOSS && e.isPhase2 && e.comboStep == 5) {
@@ -691,19 +709,6 @@ void UpdateEnemies(float dt) {
             e.swingPitch = Lerp(e.swingPitch, -30.0f, 14.0f * dt);
             e.swingYaw = Lerp(e.swingYaw, 30.0f, 14.0f * dt);
         }
-
-        // Blade position
-        float bladeLen = (e.type == BOSS) ? 9.5f : 5.8f;
-        float er = e.rotation * DEG2RAD;
-        Vector3 epivot = Vector3Add(e.position, Vector3RotateByAxisAngle({0.65f,1.65f,0.4f}, {0,1,0}, er));
-        Vector3 ebaseLocal = {0,-0.7f,0.6f};
-        Vector3 etipLocal = {0,-0.7f, bladeLen};
-        Vector3 ebase = Vector3RotateByAxisAngle(ebaseLocal, {1,0,0}, e.swingPitch*DEG2RAD);
-        ebase = Vector3RotateByAxisAngle(ebase, {0,1,0}, e.swingYaw*DEG2RAD);
-        Vector3 etip = Vector3RotateByAxisAngle(etipLocal, {1,0,0}, e.swingPitch*DEG2RAD);
-        etip = Vector3RotateByAxisAngle(etip, {0,1,0}, e.swingYaw*DEG2RAD);
-        e.bladeStart = Vector3Add(epivot, ebase);
-        e.bladeEnd = Vector3Add(epivot, etip);
     }
 }
 

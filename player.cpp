@@ -407,8 +407,23 @@ void UpdatePlayer(float dt) {
             }
         }
 
-        // Hit window
-        if (progress > 0.18f && progress < 0.82f) {
+        // Blade position (Update BEFORE collision checks) - FIXED ROTATION MATH
+        float totalYaw = (player.rotation + player.swingYaw) * DEG2RAD;
+        float pitchRad = player.swingPitch * DEG2RAD;
+        Vector3 pivotLocal = {0.65f, 1.65f, 0.4f};
+        Vector3 pivotWorld = Vector3Add(player.position,
+                                        Vector3RotateByAxisAngle(pivotLocal, {0,1,0}, player.rotation * DEG2RAD));
+        Vector3 baseLocal = {0, -0.7f, 0.6f};
+        Vector3 tipLocal = {0, -0.7f, player.weapon.length};
+        Vector3 base = Vector3RotateByAxisAngle(baseLocal, {1,0,0}, pitchRad);
+        base = Vector3RotateByAxisAngle(base, {0,1,0}, totalYaw);
+        Vector3 tip = Vector3RotateByAxisAngle(tipLocal, {1,0,0}, pitchRad);
+        tip = Vector3RotateByAxisAngle(tip, {0,1,0}, totalYaw);
+        player.bladeStart = Vector3Add(pivotWorld, base);
+        player.bladeEnd = Vector3Add(pivotWorld, tip);
+
+        // Hit window (Adjusted for Snap Acceleration)
+        if (progress > 0.45f && progress < 0.92f) {
             for (auto& e : enemies) {
                 CheckPlayerAttackHitEnemy(e);
             }
@@ -427,26 +442,22 @@ void UpdatePlayer(float dt) {
 
     AddWeaponTrailPoint();
 
-    // Blade position
-    float yawRad = player.swingYaw * DEG2RAD;
-    float pitchRad = player.swingPitch * DEG2RAD;
-    Vector3 pivotLocal = {0.65f, 1.65f, 0.4f};
-    Vector3 pivotWorld = Vector3Add(player.position,
-                                    Vector3RotateByAxisAngle(pivotLocal, {0,1,0}, player.rotation * DEG2RAD));
-    Vector3 baseLocal = {0, -0.7f, 0.6f};
-    Vector3 tipLocal = {0, -0.7f, player.weapon.length};
-    Vector3 base = Vector3RotateByAxisAngle(baseLocal, {1,0,0}, pitchRad);
-    base = Vector3RotateByAxisAngle(base, {0,1,0}, yawRad);
-    Vector3 tip = Vector3RotateByAxisAngle(tipLocal, {1,0,0}, pitchRad);
-    tip = Vector3RotateByAxisAngle(tip, {0,1,0}, yawRad);
-    player.bladeStart = Vector3Add(pivotWorld, base);
-    player.bladeEnd = Vector3Add(pivotWorld, tip);
-
     // Stamina regen
     player.staminaRegenDelay -= dt;
     bool actionPause = player.isAttacking || player.isRolling || player.isParrying || player.isCharging;
     if (player.staminaRegenDelay <= 0.0f && !actionPause) {
-        player.stamina = std::min(player.stamina + STAMINA_REGEN_RATE * dt, (float)MAX_STAMINA);
+        float regenMult = 1.0f;
+        // Detect if in light (Radiant Empowerment)
+        for (int i = 0; i < 6; i++) {
+            float ang = (float)i * 60.0f * DEG2RAD + GetTime() * 0.03f;
+            float dist = 70.0f + 10.0f * sinf(GetTime() * 0.15f + i);
+            Vector3 lightPos = {cosf(ang) * dist, 0, sinf(ang) * dist};
+            if (Vector2Distance({player.position.x, player.position.z}, {lightPos.x, lightPos.z}) < 15.0f) {
+                regenMult = 1.5f;
+                break;
+            }
+        }
+        player.stamina = std::min(player.stamina + STAMINA_REGEN_RATE * regenMult * dt, (float)MAX_STAMINA);
     }
 }
 

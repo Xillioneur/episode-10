@@ -73,9 +73,11 @@ void UpdateParticles(float dt) {
             continue;
         }
         it->position = Vector3Add(it->position, Vector3Scale(it->velocity, dt));
-        // Ascension particles defy gravity
+        // Ascension particles defy gravity with organic fluttering
         if (it->color.r == 255 && it->color.g == 203) { // Close enough to GOLD
              it->velocity.y += 0.8f * dt; 
+             it->velocity.x += sinf(GetTime() * 10.0f + it->lifetime) * 0.15f; // Flutter
+             it->velocity.z += cosf(GetTime() * 8.0f + it->lifetime) * 0.15f;
              it->velocity.x *= 0.98f;
              it->velocity.z *= 0.98f;
         } else if (it->color.r == 40 && it->color.b == 60) {
