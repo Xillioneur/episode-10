@@ -251,23 +251,23 @@ void UpdateEnemies(float dt) {
 
         if (e.isWindingUp) {
             e.windupTimer -= dt;
-            e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 8.0f * dt);
-
-            // Physical windup pose (Targeted based on attack type)
+            e.velocity = Vector3Lerp(e.velocity, {0,0,0}, 12.0f * dt);
+            
+            // Physical windup pose (Targeted based on attack type) - ABSOLUTE VELOCITY
             float targetPitch = 0.0f;
             float targetYaw = 0.0f;
 
             if (e.type == BOSS) {
-                targetPitch = -110.0f; // Boss always pulls high
+                targetPitch = -110.0f; 
                 targetYaw = 120.0f;
             } else {
-                if (e.currentAttack == LIGHT_1) { targetPitch = -85.0f; targetYaw = 0.0f; } // Overhead
-                else if (e.currentAttack == LIGHT_2) { targetPitch = 0.0f; targetYaw = 110.0f; } // Side
-                else { targetPitch = -45.0f; targetYaw = -90.0f; } // Diagonal
+                if (e.currentAttack == LIGHT_1) { targetPitch = -85.0f; targetYaw = 0.0f; } 
+                else if (e.currentAttack == LIGHT_2) { targetPitch = 0.0f; targetYaw = 110.0f; } 
+                else { targetPitch = -45.0f; targetYaw = -90.0f; } 
             }
 
-            e.swingPitch = Lerp(e.swingPitch, targetPitch, 22.0f * dt);
-            e.swingYaw = Lerp(e.swingYaw, targetYaw, 22.0f * dt);
+            e.swingPitch = Lerp(e.swingPitch, targetPitch, 45.0f * dt);
+            e.swingYaw = Lerp(e.swingYaw, targetYaw, 45.0f * dt);
 
             // Visual feedback during windup (face player)
             Vector3 toP = Vector3Subtract(player.position, e.position);
@@ -275,20 +275,19 @@ void UpdateEnemies(float dt) {
                 e.rotation = atan2f(toP.x, toP.z) * RAD2DEG;
             }
 
-
             if (e.windupTimer <= 0.0f) {
                 e.isWindingUp = false;
                 e.isAttacking = true;
                 
-                float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.85f : 0.55f)
-                                            : e.attackDur * (e.isHeavyAttack ? 1.75f : 1.0f);
-                if (e.type == BOSS && e.isPhase2) dur *= 0.75f;
+                float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.45f : 0.28f)
+                                            : e.attackDur * (e.isHeavyAttack ? 1.3f : 1.0f);
+                if (e.type == BOSS && e.isPhase2) dur *= 0.6f;
                 e.attackTimer = dur;
 
-                // Forward Lunge Impulse - INCREASED
+                // Forward Lunge Impulse - EXPLOSIVE
                 Vector3 lungeDir = {sinf(e.rotation*DEG2RAD), 0, cosf(e.rotation*DEG2RAD)};
-                float lungePower = (e.type == BOSS) ? 42.0f : (e.type == AGILE ? 32.0f : 26.0f);
-                if (e.isHeavyAttack) lungePower *= 1.5f;
+                float lungePower = (e.type == BOSS) ? 55.0f : (e.type == AGILE ? 45.0f : 38.0f);
+                if (e.isHeavyAttack) lungePower *= 1.4f;
                 e.velocity = Vector3Add(e.velocity, Vector3Scale(lungeDir, lungePower));
             }
             continue; // Skip movement while winding up
@@ -400,7 +399,7 @@ void UpdateEnemies(float dt) {
                 }
                 
                 e.isWindingUp = true;
-                e.windupTimer = (e.isPhase2) ? 0.12f : 0.18f;
+                e.windupTimer = (e.isPhase2) ? 0.04f : 0.08f;
                 
                 e.stamina -= 25.0f;
                 e.staminaRegenDelay = 1.0f;
@@ -491,7 +490,7 @@ void UpdateEnemies(float dt) {
                 e.isHeavyAttack = wantHeavy && (e.stamina >= 40.0f);
                 
                 e.isWindingUp = true;
-                float baseWindup = (e.type == AGILE) ? 0.08f : 0.14f; // Faster windups
+                float baseWindup = (e.type == AGILE) ? 0.03f : 0.06f; // Instant windups
                 e.windupTimer = baseWindup * (e.isHeavyAttack ? 1.3f : 1.0f);
                 
                 e.currentAttack = static_cast<AttackType>(e.comboStep - 1);
@@ -605,8 +604,8 @@ void UpdateEnemies(float dt) {
             
             float progress = 1.0f - (e.attackTimer / dur);
 
-            // Hyperrealistic Strike Acceleration (Ease-In)
-            float snapProg = powf(progress, 3.0f); 
+            // Hyperrealistic Strike Acceleration (Ease-In) - ABSOLUTE VELOCITY
+            float snapProg = powf(progress, 7.0f); 
 
             // Boss combo animations - CLEAN ARCS
             if (e.type == BOSS) {
