@@ -53,7 +53,7 @@ void ApplyEnemyHitToPlayer(const Enemy& e) {
     player.health -= damage;
     const_cast<Enemy&>(e).karma = std::max(0.0f, e.karma - 15.0f);
     player.hitInvuln = 0.5f;
-    player.velocity = Vector3Add(player.velocity, Vector3Scale(norm, 12.0f * knockMult));
+    player.velocity = Vector3Add(player.velocity, Vector3Scale(norm, 55.0f * knockMult)); // HYPER-IMPACT KNOCKBACK
 
     SpawnDataParticles(player.position, (e.type == BOSS || e.isHeavyAttack) ? 24 : 16);
 
@@ -146,8 +146,10 @@ bool CheckPlayerAttackHitEnemy(Enemy& e) {
     float poiseDamage = basePoiseDmg * poiseMult * player.weapon.poiseDamageMultiplier;
 
     e.health -= damage;
+    e.karma = std::min(100.0f, e.karma + 10.0f); // Blessing increases Karma
     e.hitInvuln = 0.4f;
-    e.velocity = Vector3Add(e.velocity, Vector3Scale(normToEnemy, 14.0f * knockMult));
+    float finalKnock = riposte ? 85.0f : (65.0f * knockMult);
+    e.velocity = Vector3Add(e.velocity, Vector3Scale(normToEnemy, finalKnock)); // HYPER-IMPACT KNOCKBACK
 
     // Alert the enemy immediately
     e.state = CHASE;
@@ -284,10 +286,10 @@ void UpdateEnemies(float dt) {
                 if (e.type == BOSS && e.isPhase2) dur *= 0.6f;
                 e.attackTimer = dur;
 
-                // Forward Lunge Impulse - EXPLOSIVE
+                // Forward Lunge Impulse - EXPLOSIVE MOMENTUM
                 Vector3 lungeDir = {sinf(e.rotation*DEG2RAD), 0, cosf(e.rotation*DEG2RAD)};
-                float lungePower = (e.type == BOSS) ? 55.0f : (e.type == AGILE ? 45.0f : 38.0f);
-                if (e.isHeavyAttack) lungePower *= 1.4f;
+                float lungePower = (e.type == BOSS) ? 62.0f : (e.type == AGILE ? 48.0f : 42.0f);
+                if (e.isHeavyAttack) lungePower *= 1.6f;
                 e.velocity = Vector3Add(e.velocity, Vector3Scale(lungeDir, lungePower));
             }
             continue; // Skip movement while winding up
@@ -552,6 +554,10 @@ void UpdateEnemies(float dt) {
 
         if (e.isDodging) {
             e.velocity = targetVelocity;
+        } else if (e.isAttacking || e.stunTimer > 0 || e.flinchTimer > 0) {
+            // Momentum Preservation: Natural decay for lunge and knockback
+            float friction = (e.stunTimer > 0 || e.flinchTimer > 0) ? 3.2f : 1.4f;
+            e.velocity = Vector3Scale(e.velocity, 1.0f - friction * dt);
         } else {
             e.velocity = Vector3Lerp(e.velocity, targetVelocity, 12.0f * dt);
         }

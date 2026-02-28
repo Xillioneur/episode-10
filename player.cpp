@@ -231,9 +231,13 @@ void UpdatePlayer(float dt) {
         }
     }
 
-    // Set velocity (snap to target during roll)
+    // Set velocity (snap to target during roll, allow momentum during attack/stagger)
     if (player.isRolling) {
         player.velocity = targetVelocity;
+    } else if (player.isAttacking || player.staggerTimer > 0) {
+        // Momentum Preservation Model: Natural decay rather than snapping to zero
+        float friction = (player.staggerTimer > 0) ? 2.8f : 1.2f; 
+        player.velocity = Vector3Scale(player.velocity, 1.0f - friction * dt);
     } else {
         player.velocity = Vector3Lerp(player.velocity, targetVelocity, 22.0f * dt);
     }
@@ -371,9 +375,9 @@ void UpdatePlayer(float dt) {
         }
         
         if (player.isAttacking) {
-            // Forward Lunge Impulse
+            // Forward Lunge Impulse - SIGNIFICANTLY INCREASED
             Vector3 lungeDir = {sinf(player.rotation*DEG2RAD), 0, cosf(player.rotation*DEG2RAD)};
-            float power = (player.currentAttack == HEAVY) ? 48.0f : 35.0f;
+            float power = (player.currentAttack == HEAVY) ? 72.0f : 55.0f;
             player.velocity = Vector3Add(player.velocity, Vector3Scale(lungeDir, power));
         }
         player.powerReady = false;
@@ -581,6 +585,22 @@ void DrawPlayer() {
         DrawSphere({0, 0, 0}, 1.2f, Fade(divineGold, pulse));
     }
 
+    // Avatar of Virtue (Aura based on dominant path)
+    Color auraCol = WHITE;
+    if (player.mercyLevel >= player.disciplineLevel && player.mercyLevel >= player.fortitudeLevel && player.mercyLevel > 0) auraCol = GOLD;
+    else if (player.disciplineLevel > player.mercyLevel && player.disciplineLevel >= player.fortitudeLevel) auraCol = SKYBLUE;
+
+    if (player.mercyLevel > 0 || player.disciplineLevel > 0 || player.fortitudeLevel > 0) {
+        float auraTime = GetTime();
+        rlPushMatrix();
+        rlRotatef(auraTime * 30.0f, 0, 1, 0);
+        DrawCircle3D({0, 0.5f, 0}, 1.8f, {1,0,0}, 90.0f, Fade(auraCol, 0.15f));
+        DrawCircle3D({0, 0.5f, 0}, 1.8f, {1,0,0}, 90.0f, Fade(auraCol, 0.15f)); 
+        rlRotatef(90.0f, 1, 0, 0); // Cross ring
+        DrawCircle3D({0, 0, 0}, 1.6f, {0,1,0}, 90.0f, Fade(auraCol, 0.1f));
+        rlPopMatrix();
+    }
+
     rlPopMatrix();
     rlPopMatrix();
-}
+    }

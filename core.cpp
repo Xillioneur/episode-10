@@ -358,6 +358,65 @@ void UpdateGame(float dt) {
         }
     }
 
+    // 3. The Guiding Light (Navigation)
+    static float guideTimer = 0.0f;
+    guideTimer += dt;
+    if (guideTimer > 0.15f) {
+        guideTimer = 0.0f;
+        
+        Vector3 targetPos = {0,0,0};
+        bool targetFound = false;
+        Color guideCol = WHITE;
+
+        // Priority 1: Nearest Enemy
+        float closestDist = 9999.0f;
+        for (const auto& e : enemies) {
+            if (e.alive) {
+                float d = Vector3Distance(player.position, e.position);
+                if (d < closestDist) {
+                    closestDist = d;
+                    targetPos = e.position;
+                    targetFound = true;
+                    guideCol = {255, 100, 100, 150}; // Soft Red for Spirits
+                }
+            }
+        }
+
+        // Priority 2: Sanctuary (If upgrades available and enemies clear)
+        if (!targetFound && (player.mercyRelics >=3 || player.disciplineRelics >= 3 || player.fortitudeRelics >= 3)) {
+            closestDist = 9999.0f;
+            for (const auto& obs : obstacles) {
+                if (obs.type == OBS_STATUE) {
+                    float d = Vector3Distance(player.position, obs.pos);
+                    if (d < closestDist) {
+                        closestDist = d;
+                        targetPos = obs.pos;
+                        targetFound = true;
+                        guideCol = GOLD;
+                    }
+                }
+            }
+        }
+
+        // Priority 3: Exit
+        if (!targetFound && exitActive) {
+            targetPos = exitPosition;
+            targetFound = true;
+            guideCol = SKYBLUE;
+        }
+
+        if (targetFound) {
+            Particle p{};
+            p.position = Vector3Add(player.position, {0, 1.0f, 0});
+            Vector3 dir = Vector3Normalize(Vector3Subtract(targetPos, p.position));
+            p.velocity = Vector3Scale(dir, 6.0f);
+            p.lifetime = p.maxLife = 1.2f;
+            p.color = Fade(guideCol, 0.6f);
+            p.size = 0.25f;
+            particles.push_back(p);
+        }
+    }
+
     UpdateCamera(dt);
 
     if (gameState != PLAYING) return;
