@@ -22,40 +22,53 @@ Vector3 camPos = {0, CAMERA_HEIGHT, CAMERA_DISTANCE};
 float hitStopTimer = 0.0f;
 
 // ======================================================================
-// Audio Synthesis - Hyperrealistic Physical Modeling Engine
+// ======================================================================
+// Audio Synthesis - Hyperrealistic Additive & Modal Engine
 // ======================================================================
 void TriggerSFX(int type) {
     synth.sfxType = type;
     synth.sfxTimer = 0.0f;
     synth.amplitude = 1.0f;
-    for(int i=0; i<8; i++) synth.phase[i] = (float)GetRandomValue(0, 1000) / 1000.0f; 
+    for(int i=0; i<8; i++) synth.phase[i] = 0.0f;
+    for(int i=0; i<4; i++) { synth.filter[i][0] = 0; synth.filter[i][1] = 0; }
     
-    if (type == 1) { // Swing (FM Edge + Air Zip)
-        synth.frequency = 4200.0f;
-        synth.decay = 14.0f;
-    } else if (type == 2) { // Hit (Karplus-Strong Metallic Impact)
-        synth.frequency = 180.0f;
-        synth.decay = 8.5f;
-    } else if (type == 3) { // Ascension (Shimmering Shepard Tone)
-        synth.frequency = 330.0f;
-        synth.decay = 0.6f;
-    } else if (type == 4) { // Footstep (Filtered Impact)
-        synth.frequency = 2800.0f;
+    if (type == 1) { // Player Swing (Additive Aeolian Blessing)
+        synth.frequency = 3200.0f; 
+        synth.decay = 3.5f;        
+        synth.amplitude = 1.0f;
+    } else if (type == 5) { // Spirit Swing (Whispering Vortex)
+        synth.frequency = 4200.0f; 
+        synth.decay = 4.2f;        
+        synth.amplitude = 0.85f;
+    } else if (type == 2) { // Hit (Modal Marble Impact)
+        synth.frequency = 160.0f;
         synth.decay = 22.0f;
-        synth.amplitude = 0.25f;
+        synth.amplitude = 1.0f;
+    } else if (type == 3) { // Ascension (Celestial Choir)
+        synth.frequency = 220.0f;
+        synth.decay = 1.2f;
+    } else if (type == 4) { // Player Footstep (Heavier Modal Tap)
+        synth.frequency = 450.0f;  // Lower thud base
+        synth.decay = 45.0f;
+        synth.amplitude = 0.75f;
+    } else if (type == 6) { // Spirit Footstep (Hollow Spectral Tap)
+        synth.frequency = 950.0f;  // Higher spectral base
+        synth.decay = 38.0f;
+        synth.amplitude = 0.45f;
     }
 }
 
-// Simple Resonant Multi-mode Filter
-inline float ApplyFilter(int id, float input, float cutoff, float resonance) {
-    float f = cutoff * 1.16f;
-    float fb = resonance * (1.0f - 0.15f * f * f);
-    input -= synth.filter[id][0] * fb;
-    input *= 0.35013f * (f*f)*(f*f);
-    float out = input + 0.3f * synth.filter[id][0] + (1.0f - f) * synth.filter[id][1];
-    synth.filter[id][1] = synth.filter[id][0];
-    synth.filter[id][0] = input;
-    return out;
+// Stable State-Variable Filter (Chamberlin SVF)
+struct FilterOut { float low, high, band; };
+inline FilterOut ApplyFilterFull(int id, float input, float cutoff, float resonance) {
+    float f = 1.5f * sinf(PI * cutoff / 2.0f);
+    float q = 1.0f - resonance;
+    float low = synth.filter[id][1] + f * synth.filter[id][0];
+    float high = input - low - q * synth.filter[id][0];
+    float band = f * high + synth.filter[id][0];
+    synth.filter[id][0] = band;
+    synth.filter[id][1] = low;
+    return {low, high, band};
 }
 
 void ProcessAudioStream(void *buffer, unsigned int frames) {
@@ -65,71 +78,118 @@ void ProcessAudioStream(void *buffer, unsigned int frames) {
 
     for (unsigned int i = 0; i < frames; i++) {
         float sample = 0.0f;
-        synth.lfo = sinf(GetTime() * 0.4f);
+        float time = GetTime();
 
-        // 1. CATHEDRAL AMBIANCE (FM Drone + Void Wind)
-        static float ambPhases[4] = {0};
-        float ambFreqs[4] = {55.0f, 110.0f, 164.8f, 220.0f}; 
+        // 1. CELESTIAL AMBIANCE (Harmonic Modal Drones)
+        static float dronePhases[4] = {0};
+        float droneFreqs[4] = {55.0f, 110.0f, 164.8f, 220.0f};
         for(int j=0; j<4; j++) {
-            float mod = sinf(ambPhases[(j+1)%4] * 0.5f) * 2.0f;
-            ambPhases[j] += (ambFreqs[j] + mod) * dt;
-            sample += sinf(ambPhases[j] * 2.0f * PI) * 0.012f;
+            float drift = sinf(time * 0.15f + j) * 0.1f;
+            dronePhases[j] += (droneFreqs[j] + drift) * dt;
+            sample += sinf(dronePhases[j] * 2.0f * PI) * 0.012f;
         }
-        
-        float whiteNoise = (float)GetRandomValue(-100, 100) / 100.0f;
-        synth.filter[0][0] = Lerp(synth.filter[0][0], whiteNoise, 0.004f + 0.002f * synth.lfo);
-        sample += synth.filter[0][0] * 0.03f;
 
         // 2. SFX SYNTHESIS
         if (synth.amplitude > 0.0001f) {
             synth.sfxTimer += dt;
-            float envelope = powf(synth.amplitude, 2.0f); 
+            float attack = Clamp(synth.sfxTimer * 40.0f, 0.0f, 1.0f);
+            float env = attack * powf(synth.amplitude, 2.5f);
             synth.amplitude -= synth.decay * dt;
             if (synth.amplitude < 0) synth.amplitude = 0;
 
-            if (synth.sfxType == 1) { // Blade Zip (FM Shriek + HPF Noise)
-                float currentFreq = Lerp(synth.frequency, 800.0f, powf(1.0f - synth.amplitude, 0.4f));
-                float mod = sinf(synth.phase[1] * 2.0f * PI) * 1500.0f;
-                float edge = sinf(synth.phase[0] * 2.0f * PI + mod) * 0.5f;
-                synth.phase[0] += currentFreq * dt;
-                synth.phase[1] += (currentFreq * 1.414f) * dt; 
-                static float lastN = 0;
-                float hpNoise = whiteNoise - lastN;
-                lastN = whiteNoise;
-                sample += (edge + hpNoise * 0.6f) * envelope * 1.5f;
+            if (synth.sfxType == 1) { // Player Additive Sine Woosh
+                float strikeProg = synth.sfxTimer * 6.5f;
+                float f_mass = 60.0f * expf(-strikeProg * 0.5f);
+                float mass = sinf(synth.phase[0] * 2.0f * PI) * 0.8f;
+                synth.phase[0] += f_mass * dt;
+                float f_body = 400.0f * expf(-strikeProg * 0.8f);
+                float body = sinf(synth.phase[1] * 2.0f * PI) * 0.6f;
+                synth.phase[1] += f_body * dt;
+                float f_edge = synth.frequency * expf(-strikeProg * 1.5f);
+                float ripple = 1.0f + sinf(synth.sfxTimer * 140.0f * 2.0f * PI) * 0.08f;
+                float whistle = sinf(synth.phase[2] * 2.0f * PI) * 0.5f;
+                synth.phase[2] += (f_edge * ripple) * dt;
+                float shimmer = sinf(synth.phase[3] * 2.0f * PI) * 0.3f;
+                synth.phase[3] += (f_edge * 1.618f) * dt;
+                float woosh = (mass + body + whistle + shimmer) * env;
+                woosh = tanhf(woosh * 1.4f);
+                sample += woosh * 2.8f;
             } 
-            else if (synth.sfxType == 2) { // Metallic Impact
+            else if (synth.sfxType == 5) { // Spirit Whispering Vortex (Hollow & Ghostly)
+                float strikeProg = synth.sfxTimer * 5.0f;
+                float f_hollow = 120.0f * expf(-strikeProg * 0.4f);
+                float base = sinf(synth.phase[0] * 2.0f * PI) * 0.7f;
+                synth.phase[0] += f_hollow * dt;
+                float f_tube = synth.frequency * expf(-strikeProg * 1.2f);
+                float spectral = 1.0f + sinf(synth.sfxTimer * 220.0f * 2.0f * PI) * 0.25f;
+                float vortex = sinf(synth.phase[1] * 2.0f * PI) * 0.4f;
+                synth.phase[1] += (f_tube * spectral) * dt;
+                float shimmer = sinf(synth.phase[2] * 2.0f * PI) * 0.25f;
+                synth.phase[2] += (f_tube * 2.718f) * dt; 
+                float woosh = (base + vortex + shimmer) * env;
+                woosh = tanhf(woosh * 1.1f);
+                sample += woosh * 2.2f;
+            }
+            else if (synth.sfxType == 2) { // Modal Impact (Pure Marble Strike)
+                float modalRes = 0.0f;
+                float modes[] = {1.0f, 1.58f, 2.24f, 2.55f, 3.16f, 4.22f};
+                for(int j=0; j<6; j++) {
+                    float modeDamping = expf(-synth.sfxTimer * (45.0f + j * 20.0f));
+                    modalRes += sinf(synth.phase[j] * 2.0f * PI) * (0.45f / (j+1)) * modeDamping;
+                    synth.phase[j] += (synth.frequency * modes[j]) * dt;
+                }
+                sample += modalRes * env * 2.8f;
+            }
+            else if (synth.sfxType == 3) { // Celestial Choir
+                for (int h = 1; h <= 6; h++) {
+                    float flutter = 1.0f + sinf(time * 12.0f + h) * 0.015f;
+                    sample += sinf(synth.phase[h-1] * 2.0f * PI) * (0.35f / h) * synth.amplitude;
+                    synth.phase[h-1] += (synth.frequency * h * flutter) * dt;
+                }
+                synth.frequency += 120.0f * dt;
+            }
+            else if (synth.sfxType == 4) { // Player Footstep (Solid Marble)
+                // Layer 1: High Contact Snap
+                float snap = sinf(synth.phase[0] * 2.0f * PI) * expf(-synth.sfxTimer * 120.0f);
+                synth.phase[0] += 3500.0f * dt;
+                // Layer 2: Modal Body (Damped Thud)
+                float body = sinf(synth.phase[1] * 2.0f * PI) * expf(-synth.sfxTimer * 60.0f);
+                body += sinf(synth.phase[2] * 2.0f * PI) * 0.5f * expf(-synth.sfxTimer * 80.0f);
+                synth.phase[1] += synth.frequency * dt;
+                synth.phase[2] += synth.frequency * 1.414f * dt;
+                sample += (snap * 0.4f + body * 0.6f) * powf(synth.amplitude, 2.0f) * 2.8f;
+            }
+            else if (synth.sfxType == 6) { // Spirit Footstep (Spectral Resonance)
+                float strikeProg = synth.sfxTimer * 15.0f;
+                // Layer 1: Spectral Impact (4 non-harmonic oscillators)
+                float modes[] = {1.0f, 1.618f, 2.236f, 3.141f};
                 float ring = 0.0f;
-                float freqs[] = {1.0f, 1.45f, 1.91f, 2.22f};
                 for(int j=0; j<4; j++) {
-                    ring += sinf(synth.phase[j] * 2.0f * PI) * (0.4f / (j+1));
-                    synth.phase[j] += (synth.frequency * freqs[j]) * dt;
+                    // Erratic spectral jitter
+                    float jitter = 1.0f + sinf(synth.sfxTimer * 120.0f + j) * 0.02f;
+                    float damping = expf(-synth.sfxTimer * (40.0f + j * 12.0f));
+                    ring += sinf(synth.phase[j] * 2.0f * PI) * (0.4f / (j+1)) * damping;
+                    synth.phase[j] += (synth.frequency * modes[j] * jitter) * dt;
                 }
-                float thump = sinf(synth.sfxTimer * 80.0f * 2.0f * PI) * 0.6f * expf(-synth.sfxTimer * 25.0f);
-                sample += (ring * 0.5f + thump) * envelope * 1.2f;
-            }
-            else if (synth.sfxType == 3) { // Shimmering Shepard Tone
-                for (int h = 1; h <= 8; h++) {
-                    float f = synth.frequency * powf(2.0f, (float)h/2.0f);
-                    float detune = 1.0f + sinf(GetTime() * 12.0f + h) * 0.005f;
-                    sample += sinf(synth.phase[h-1] * 2.0f * PI) * (0.25f / h) * synth.amplitude;
-                    synth.phase[h-1] += (f * detune) * dt;
-                }
-                synth.frequency += 200.0f * dt;
-            }
-            else if (synth.sfxType == 4) { // Resonant Footstep
-                sample += ApplyFilter(3, whiteNoise, 0.05f, 0.3f) * envelope * 0.8f;
+                
+                // Layer 2: Ghostly Shimmer (Resonant Band-Pass tail)
+                float shimmerFreq = Clamp(0.12f * expf(-strikeProg), 0.04f, 0.12f);
+                FilterOut f_shim = ApplyFilterFull(0, ring, shimmerFreq, 0.85f);
+                float ghostly = f_shim.band * 1.5f;
+                
+                sample += (ring * 0.6f + ghostly * 0.4f) * powf(synth.amplitude, 2.0f) * 2.4f;
             }
         }
 
-        // 3. CATHEDRAL REVERB
+        // 3. SPATIAL REVERB
         synth.delayBuffer[synth.delayPtr] = sample + synth.delayBuffer[synth.delayPtr] * 0.45f;
-        sample += synth.delayBuffer[synth.delayPtr] * 0.35f;
+        float reverb = synth.delayBuffer[synth.delayPtr];
         synth.delayPtr = (synth.delayPtr + 1) % 4410;
+        sample = Lerp(sample, reverb, 0.3f);
 
         sample = Clamp(sample, -1.0f, 1.0f);
-        d[i*2] = (short)(sample * 26000.0f);
-        d[i*2+1] = (short)(sample * 26000.0f);
+        d[i*2] = (short)(sample * 31000.0f);
+        d[i*2+1] = (short)(sample * 31000.0f);
     }
 }
 

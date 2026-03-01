@@ -233,7 +233,7 @@ void UpdatePlayer(float dt) {
 
     // Footstep Audio
     static float stepTimer = 0.0f;
-    if (hasMoveInput && !player.isRolling && player.position.y <= 0.01f) {
+    if (hasMoveInput && !player.isRolling && player.position.y <= 0.5f) {
         float stepInterval = sprinting ? 0.25f : 0.38f;
         stepTimer -= dt;
         if (stepTimer <= 0.0f) {

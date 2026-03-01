@@ -283,7 +283,7 @@ void UpdateEnemies(float dt) {
             if (e.windupTimer <= 0.0f) {
                 e.isWindingUp = false;
                 e.isAttacking = true;
-                TriggerSFX(1); // Enemy swing sound
+                TriggerSFX(5); // Spirit swing sound
                 
                 float dur = (e.type == BOSS) ? ((e.comboStep == 3 || e.comboStep == 5) ? 0.45f : 0.28f)
                                             : e.attackDur * (e.isHeavyAttack ? 1.3f : 1.0f);
@@ -584,6 +584,26 @@ void UpdateEnemies(float dt) {
         if (!blocked) {
             e.position.x = candidatePos.x;
             e.position.z = candidatePos.z;
+
+            // Spirit Footstep Trigger
+            if (Vector3Length(e.velocity) > 2.0f && !e.isDodging && !e.isAttacking && !e.isWindingUp) {
+                e.stepTimer -= dt;
+                if (e.stepTimer <= 0.0f) {
+                    TriggerSFX(6);
+                    // Variety based on enemy type
+                    if (e.type == TANK) {
+                        synth.frequency = 650.0f; // Heavier
+                        synth.amplitude = 0.65f;
+                    } else if (e.type == AGILE) {
+                        synth.frequency = 1250.0f; // Sharper
+                        synth.amplitude = 0.35f;
+                    }
+                    e.stepTimer = 0.42f / (Vector3Length(e.velocity) / 10.0f);
+                    e.stepTimer = Clamp(e.stepTimer, 0.2f, 0.5f);
+                }
+            } else {
+                e.stepTimer = 0.0f;
+            }
         } else {
             e.velocity = Vector3Scale(e.velocity, 0.05f);
         }

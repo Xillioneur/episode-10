@@ -205,6 +205,7 @@ struct Enemy {
     bool isPhase2 = false;
     float phaseTransitionTimer = 0.0f;
     bool hasTriggeredPhase2 = false;
+    float stepTimer = 0.0f;
 
     // Karma system
     float karma = 50.0f;
@@ -227,7 +228,7 @@ struct AudioSynth {
     
     // SFX Triggers
     float sfxTimer;
-    int sfxType; // 0: None, 1: Swing, 2: Hit, 3: Ascension, 4: Footstep
+    int sfxType; // 0: None, 1: Player Swing, 2: Hit, 3: Ascension, 4: Player Step, 5: Spirit Swing, 6: Spirit Step
 };
 
 enum ObstacleType { OBS_SHARD, OBS_ARCH, OBS_TREE, OBS_STATUE, OBS_ALTAR, OBS_DEBRIS };
